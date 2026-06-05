@@ -14,92 +14,10 @@ import org.kde.plasma.extras as PlasmaExtras
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.plasma5support as Plasma5Support
 
-import "../assets/emoji-metadata.js" as EmojiList
-import "../assets/emoji-kitchen-metadata.js" as KitchenMetadata
-import "../assets/kaomoji-metadata.js" as KaomojiList
-
 // MAIN
 
 PlasmoidItem {
     id: root
-
-    property var _cachedEmojis: null
-    readonly property string klipyBaseUrl: "https://api.klipy.com/api/v1"
-    readonly property string klipyDefaultApiKey: "s9q3axg5VURfGO45IDSDhJ1Nxm445kzNdiRF4lmbcVkJaZDe9ShO01YIOvIvtaY2"
-    readonly property int klipyDefaultPerPage: 24
-
-    function getIconEmojis(emojiList) {
-        if (_cachedEmojis) {
-            return _cachedEmojis;
-        }
-
-        var allEmojis = [];
-        var list = emojiList;
-
-        for (var category in list) {
-            var categoryData = list[category];
-            if (categoryData) {
-                for (var i = 0; i < categoryData.length; i++) {
-                    allEmojis.push(categoryData[i].emoji);
-                }
-            }
-        }
-
-        _cachedEmojis = allEmojis;
-        return allEmojis;
-    }
-
-    function normalizeKlipyApiKey(apiKey) {
-        var key = (apiKey || klipyDefaultApiKey).trim();
-        return key !== "" ? key : klipyDefaultApiKey;
-    }
-
-    function buildGifUrl(apiKey, query, page, perPage) {
-        var key = normalizeKlipyApiKey(apiKey);
-        var currentPage = page || 1;
-        var pageSize = perPage || klipyDefaultPerPage;
-
-        if (!query || query.trim() === "") {
-            return klipyBaseUrl + "/" + key + "/gifs/trending?per_page=" + pageSize + "&page=" + currentPage;
-        }
-
-        return klipyBaseUrl + "/" + key + "/gifs/search?q=" + encodeURIComponent(query) + "&per_page=" + pageSize + "&page=" + currentPage;
-    }
-
-    function parseGifItems(response) {
-        if (!response || !response.result || !response.data || !response.data.data) {
-            return [];
-        }
-
-        var list = response.data.data;
-        var parsed = [];
-
-        for (var i = 0; i < list.length; i++) {
-            var item = list[i];
-            var fileObj = item.file && item.file.sm && item.file.sm.gif ? item.file.sm.gif : null;
-            if (!fileObj) {
-                continue;
-            }
-
-            var rawGif = item.file && item.file.hd && item.file.hd.gif ? item.file.hd.gif.url : "";
-            if (rawGif === "") {
-                continue;
-            }
-
-            var previewGif = fileObj.url;
-            var w = fileObj.width || 200;
-            var h = fileObj.height || 200;
-
-            parsed.push({
-                title: item.title || "Klipy GIF",
-                rawUrl: rawGif,
-                previewUrl: previewGif,
-                aspectRatio: w / h
-            });
-        }
-
-        return parsed;
-    }
 
     Plasmoid.icon: "preferences-desktop-emoticons-symbolic"
     preferredRepresentation: compactRepresentation
@@ -173,7 +91,16 @@ PlasmoidItem {
 
             function ensureEmojiIcons() {
                 if (emojiIcons.length === 0) {
-                    emojiIcons = root.getIconEmojis(EmojiList.emojiList);
+                    if (fullRepresentationView.item && fullRepresentationView.item.emojiList.length > 0) {
+                        let all = [];
+                        let list = fullRepresentationView.item.emojiList;
+                        for (let i = 0; i < list.length; i++) {
+                            all.push(list[i].emoji);
+                        }
+                        emojiIcons = all;
+                    } else {
+                        emojiIcons = ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕"];
+                    }
                 }
                 if (emojiIcons.length > 0) {
                     currentEmojiIndex = Math.floor(Math.random() * emojiIcons.length);
@@ -267,6 +194,61 @@ PlasmoidItem {
             implicitHeight: Math.max(Kirigami.Units.gridUnit * 24, minimumRequiredHeight)
 
             property var plasmoidItem: null
+
+            Loader {
+                id: emojiHelperLoader
+                asynchronous: true
+                source: "../service/EmojiHelper.qml"
+                active: true
+                onLoaded: {
+                    if (item) {
+                        item.loadEmojis();
+                    }
+                }
+            }
+
+            Connections {
+                target: emojiHelperLoader.item ? emojiHelperLoader.item : null
+                function onEmojiListChanged() {
+                    populateKitchenEmojiList();
+                    updateFilteredEmojis();
+                }
+            }
+
+            Loader {
+                id: kitchenHelperLoader
+                asynchronous: true
+                source: "../service/KitchenHelper.qml"
+                active: (selectedCategory === catEmojiKitchen) || (allEmojisView && allEmojisView.categoryStates[catEmojiKitchen] === true)
+                onLoaded: {
+                    if (item && emojiList.length > 0) {
+                        populateKitchenEmojiList();
+                    }
+                }
+            }
+
+            Connections {
+                target: kitchenHelperLoader.active ? kitchenHelperLoader : null
+                function onStatusChanged() {
+                    if (kitchenHelperLoader.status === Loader.Ready && emojiList.length > 0) {
+                        populateKitchenEmojiList();
+                    }
+                }
+            }
+
+            Loader {
+                id: kaomojiHelperLoader
+                asynchronous: true
+                source: "../service/KaomojiHelper.qml"
+                active: (selectedCategory === catKaomoji)
+            }
+
+            Loader {
+                id: gifHelper
+                asynchronous: true
+                source: "../service/GifHelper.qml"
+                active: true
+            }
             readonly property bool isWidgetExpanded: fullRoot.plasmoidItem ? fullRoot.plasmoidItem.expanded : true
             property bool sidebarExpanded: false
             property bool isAnyCategoryDragging: false
@@ -419,7 +401,7 @@ PlasmoidItem {
                 }
             ]
 
-            property var emojiList: []
+            property var emojiList: emojiHelperLoader.item ? emojiHelperLoader.item.emojiList : []
             property string filter: ""
             property string lastFilterForGroups: "-1"
             property var filteredEmojis: []
@@ -435,7 +417,7 @@ PlasmoidItem {
             property bool recentGifsExpanded: true
             property bool recentKitchenExpanded: true
 
-            property bool isLoading: false
+            property bool isLoading: emojiHelperLoader.item ? emojiHelperLoader.item.isLoading : false
             property int loadingProgress: 0
             property int totalEmojisToLoad: 0
             property var pendingEmojis: []
@@ -443,7 +425,7 @@ PlasmoidItem {
 
             property var loadingBuffer: []
             property var kitchenEmojiList: []
-            property var emojiByGroup: ({})
+            property var emojiByGroup: emojiHelperLoader.item ? emojiHelperLoader.item.emojiByGroup : ({})
             property var activeEmojis: []
             property var activeGifs: []
             property var activeKitchens: []
@@ -536,107 +518,9 @@ PlasmoidItem {
                 property string favoriteEmojisJson: "[]"
             }
 
-            Timer {
-                id: loadTimer
-                interval: 10
-                repeat: true
-                onTriggered: processNextChunk()
-            }
-
-            function processNextChunk() {
-                const limit = Math.min(loadingProgress + chunkSize, totalEmojisToLoad);
-                const entries = emojiList;
-                let currentEntries = [];
-                let processedCount = 0;
-                const sourceData = pendingEmojis;
-
-                while (loadingProgress < totalEmojisToLoad && processedCount < chunkSize) {
-                    const item = sourceData[loadingProgress];
-                    const itemName = item.name || "";
-                    const itemAliases = item.aliases || [];
-                    const itemTags = item.tags || [];
-                    const itemGroup = item.group;
-
-                    let searchStr = (item.emoji + " " + itemName + " " + (item.slug || "") + " " + itemGroup).toLowerCase();
-                    if (itemAliases.length > 0)
-                    searchStr += " " + itemAliases.join(" ").toLowerCase();
-                    if (itemTags.length > 0)
-                    searchStr += " " + itemTags.join(" ").toLowerCase();
-
-                    loadingBuffer.push({
-                        emoji: item.emoji,
-                        name: itemName,
-                        slug: itemName ? itemName.toLowerCase().replace(/[^a-z0-9]+/g, '-') : "",
-                        group: itemGroup,
-                        aliases: itemAliases,
-                        tags: itemTags,
-                        searchString: searchStr,
-                        emoji_version: "",
-                        unicode_version: ""
-                    });
-
-                    loadingProgress++;
-                    processedCount++;
-                }
-
-                if (loadingProgress >= totalEmojisToLoad) {
-                    loadTimer.stop();
-                    emojiList = loadingBuffer;
-                    isLoading = false;
-                    loadingBuffer = [];
-                    pendingEmojis = [];
-                    console.log("Successfully loaded", emojiList.length, "emojis asynchronously");
-
-                    const kitchenBases = new Set(Object.keys(KitchenMetadata.kitchenMetadata));
-                    kitchenEmojiList = emojiList.filter(e => {
-                        if (!e.emoji)
-                        return false;
-                        let cp = [];
-                        for (const char of e.emoji)
-                        cp.push(char.codePointAt(0).toString(16));
-                        return kitchenBases.has(cp.join("-"));
-                    });
-
-                    const byGroup = {};
-                    for (let i = 0; i < emojiList.length; i++) {
-                        const g = emojiList[i].group;
-                        if (g) {
-                            if (!byGroup[g])
-                            byGroup[g] = [];
-                            byGroup[g].push(emojiList[i]);
-                        }
-                    }
-                    emojiByGroup = byGroup;
-
-                    updateFilteredEmojis();
-                }
-            }
-
             function loadEmojis() {
-                try {
-                    const rawData = EmojiList.emojiList;
-                    const flatList = [];
-
-                    isLoading = true;
-                    loadingProgress = 0;
-                    loadingBuffer = [];
-                    for (const category in rawData) {
-                        if (!Object.prototype.hasOwnProperty.call(rawData, category))
-                        continue;
-                        const emojiArray = rawData[category] || [];
-                        for (let i = 0; i < emojiArray.length; i++) {
-                            emojiArray[i].group = category;
-                            flatList.push(emojiArray[i]);
-                        }
-                    }
-
-                    pendingEmojis = flatList;
-                    totalEmojisToLoad = flatList.length;
-
-                    loadTimer.restart();
-                } catch (e) {
-                    console.log("Error starting emoji load:", e);
-                    isLoading = false;
+                if (emojiHelperLoader.item) {
+                    emojiHelperLoader.item.loadEmojis();
                 }
             }
 
@@ -935,6 +819,20 @@ PlasmoidItem {
                     res.push(cp);
                 }
                 return res.join("-");
+            }
+
+            function populateKitchenEmojiList() {
+                if (kitchenHelperLoader.item && emojiList.length > 0) {
+                    const kitchenBases = new Set(Object.keys(kitchenHelperLoader.item.kitchenMetadata));
+                    kitchenEmojiList = emojiList.filter(e => {
+                        if (!e.emoji)
+                            return false;
+                        let cp = [];
+                        for (const char of e.emoji)
+                            cp.push(char.codePointAt(0).toString(16));
+                        return kitchenBases.has(cp.join("-"));
+                    });
+                }
             }
 
             function updateFilteredEmojis() {
@@ -2490,7 +2388,7 @@ PlasmoidItem {
                                 }
 
                                 var page = append ? gifView.currentPage : 1;
-                                var url = root.buildGifUrl(plasmoid.configuration.KlipyApiKey, query, page, 24);
+                                var url = gifHelper.item ? gifHelper.item.buildGifUrl(plasmoid.configuration.KlipyApiKey, query, page, 24) : "";
 
                                 var xhr = new XMLHttpRequest();
                                 xhr.open("GET", url);
@@ -2506,7 +2404,7 @@ PlasmoidItem {
                                                 return;
                                             }
 
-                                            var parsed = root.parseGifItems(response);
+                                            var parsed = gifHelper.item ? gifHelper.item.parseGifItems(response) : [];
 
                                             if (append) {
                                                 rawGifsList = rawGifsList.concat(parsed);
@@ -3389,7 +3287,7 @@ PlasmoidItem {
 
                                 Repeater {
                                     id: kaomojiParentRepeater
-                                    model: KaomojiList.kaomojiList
+                                    model: (kaomojiHelperLoader.item && kaomojiHelperLoader.item.kaomojiList) ? kaomojiHelperLoader.item.kaomojiList : []
                                     delegate: Column {
                                         width: parent.width
                                         spacing: 0
@@ -3808,69 +3706,13 @@ PlasmoidItem {
 
 
                             function updateResult() {
-                                if (emoji1 !== "" && emoji2 !== "") {
-                                    let cp1 = fullRoot.getCodepoint(emoji1);
-                                    let cp2 = fullRoot.getCodepoint(emoji2);
-
-                                    let findCombo = (c1, c2) => {
-                                        let stripFE0F = s => s.replace(/-fe0f/g, "");
-                                        let c1_norm = stripFE0F(c1);
-                                        let c2_norm = stripFE0F(c2);
-
-                                        let base = KitchenMetadata.kitchenMetadata[c1];
-                                        if (base) {
-                                            let exact = base.find(c => stripFE0F(c.e) === c2_norm);
-                                            if (exact)
-                                            return {
-                                                entry: exact,
-                                                b: c1,
-                                                p: exact.e
-                                            };
-                                        }
-
-                                        base = KitchenMetadata.kitchenMetadata[c1_norm];
-                                        if (base) {
-                                            let loose = base.find(c => stripFE0F(c.e) === c2_norm);
-                                            if (loose)
-                                            return {
-                                                entry: loose,
-                                                b: c1_norm,
-                                                p: loose.e
-                                            };
-                                        }
-                                        return null;
-                                    };
-
-                                    let combo = findCombo(cp1, cp2) || findCombo(cp2, cp1);
-
-                                    if (combo) {
-                                        let toUrl = cp => "u" + cp.replace(/-/g, "-u");
-                                        let stripFE0F = s => s.replace(/-fe0f/g, "");
-
-                                        let b_unstripped = combo.b;
-                                        let b_stripped = stripFE0F(combo.b);
-                                        let p_unstripped = combo.p;
-                                        let p_stripped = stripFE0F(combo.p);
-
-                                        let baseUrl = "https://www.gstatic.com/android/keyboard/emojikitchen/" + combo.entry.d + "/";
-
-                                        let candidates = [];
-
-                                        candidates.push(baseUrl + toUrl(b_unstripped) + "/" + toUrl(combo.b) + "_" + toUrl(combo.p) + ".png");
-                                        if (b_stripped !== b_unstripped) {
-                                            candidates.push(baseUrl + toUrl(b_stripped) + "/" + toUrl(combo.b) + "_" + toUrl(combo.p) + ".png");
-                                        }
-
-                                        candidates.push(baseUrl + toUrl(p_unstripped) + "/" + toUrl(combo.p) + "_" + toUrl(combo.b) + ".png");
-                                        if (p_stripped !== p_unstripped) {
-                                            candidates.push(baseUrl + toUrl(p_stripped) + "/" + toUrl(combo.p) + "_" + toUrl(combo.b) + ".png");
-                                        }
-
+                                if (kitchenHelperLoader.item && emoji1 !== "" && emoji2 !== "") {
+                                    let candidates = kitchenHelperLoader.item.resolveComboCandidates(emoji1, emoji2, fullRoot.getCodepoint);
+                                    if (candidates && candidates.length > 0) {
                                         candidatesList = candidates;
                                         currentCandidateIndex = 0;
                                         resultUrl = candidates[0];
                                         _actualSource = candidates[0];
-
                                         console.log("DEBUG: Candidates list generated:", JSON.stringify(candidates));
                                     } else {
                                         candidatesList = [];
@@ -3890,72 +3732,26 @@ PlasmoidItem {
                             onEmoji1Changed: updateResult()
                             onEmoji2Changed: updateResult()
 
-                            function emojiFromCodepoint(cp) {
-                                if (!cp)
-                                return "";
-                                return cp.split("-").map(part => String.fromCodePoint(parseInt(part, 16))).join("");
-                            }
                             function randomize() {
-                                let bases = Object.keys(KitchenMetadata.kitchenMetadata);
-                                if (bases.length > 0) {
-                                    let cp1 = bases[Math.floor(Math.random() * bases.length)];
-                                    let partners = KitchenMetadata.kitchenMetadata[cp1];
-                                    if (partners && partners.length > 0) {
-                                        let partnerEntry = partners[Math.floor(Math.random() * partners.length)];
-                                        let cp2 = partnerEntry.e;
-
-                                        emoji1 = emojiFromCodepoint(cp1);
-                                        emoji2 = emojiFromCodepoint(cp2);
+                                if (kitchenHelperLoader.item) {
+                                    let combo = kitchenHelperLoader.item.randomize();
+                                    if (combo) {
+                                        emoji1 = combo.emoji1;
+                                        emoji2 = combo.emoji2;
                                     }
                                 }
                             }
 
                             function randomizeSlot1() {
-                                let bases = Object.keys(KitchenMetadata.kitchenMetadata);
-                                if (bases.length === 0)
-                                return;
-                                if (emoji2 !== "") {
-                                    let cp2 = fullRoot.getCodepoint(emoji2).replace(/-fe0f/g, "");
-                                    let validBases = [];
-                                    for (let cp1 of bases) {
-                                        let partners = KitchenMetadata.kitchenMetadata[cp1];
-                                        if (partners) {
-                                            for (let p of partners) {
-                                                if (p.e.replace(/-fe0f/g, "") === cp2) {
-                                                    validBases.push(cp1);
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if (validBases.length > 0) {
-                                        let chosenCp = validBases[Math.floor(Math.random() * validBases.length)];
-                                        emoji1 = emojiFromCodepoint(chosenCp);
-                                        return;
-                                    }
+                                if (kitchenHelperLoader.item) {
+                                    emoji1 = kitchenHelperLoader.item.randomizeSlot1(emoji2, fullRoot.getCodepoint);
                                 }
-                                let chosenCp = bases[Math.floor(Math.random() * bases.length)];
-                                emoji1 = emojiFromCodepoint(chosenCp);
                             }
 
                             function randomizeSlot2() {
-                                let bases = Object.keys(KitchenMetadata.kitchenMetadata);
-                                if (bases.length === 0)
-                                return;
-                                if (emoji1 !== "") {
-                                    let cp1_raw = fullRoot.getCodepoint(emoji1);
-                                    let cp1 = bases.find(k => k.replace(/-fe0f/g, "") === cp1_raw.replace(/-fe0f/g, ""));
-                                    if (cp1) {
-                                        let partners = KitchenMetadata.kitchenMetadata[cp1];
-                                        if (partners && partners.length > 0) {
-                                            let chosenPartner = partners[Math.floor(Math.random() * partners.length)];
-                                            emoji2 = emojiFromCodepoint(chosenPartner.e);
-                                            return;
-                                        }
-                                    }
+                                if (kitchenHelperLoader.item) {
+                                    emoji2 = kitchenHelperLoader.item.randomizeSlot2(emoji1, fullRoot.getCodepoint);
                                 }
-                                let chosenCp = bases[Math.floor(Math.random() * bases.length)];
-                                emoji2 = emojiFromCodepoint(chosenCp);
                             }
 
                             function copyResult() {
@@ -4475,9 +4271,38 @@ PlasmoidItem {
                     id: allEmojisRepeater
                     model: ["Favorites", "Recent", "Smileys & Emotion", "People & Body", "Animals & Nature", "Food & Drink", "Activities", "Travel & Places", "Objects", "Symbols", "Flags"]
                     delegate: Column {
+                        id: categoryColumn
                         width: parent.width
                         spacing: 0
                         property string catName: modelData
+
+                        property bool wasRendered: false
+                        property bool shouldRender: {
+                            if (wasRendered) return true;
+                            if (!allEmojisView.visible) return false;
+                            if (fullRoot.selectedCategory === catName) return true;
+                            
+                            let contentItem = allEmojisView.contentItem;
+                            if (!contentItem) return false;
+                            
+                            let viewTop = contentItem.contentY;
+                            let viewBottom = viewTop + allEmojisView.height;
+                            let margin = 600;
+                            
+                            let itemY = categoryColumn.y;
+                            let itemHeight = categoryColumn.height;
+                            
+                            if (itemHeight === 0) {
+                                return (itemY >= viewTop - margin) && (itemY <= viewBottom + margin);
+                            }
+                            return (itemY + itemHeight >= viewTop - margin) && (itemY <= viewBottom + margin);
+                        }
+                        onShouldRenderChanged: {
+                            if (shouldRender) {
+                                wasRendered = true;
+                            }
+                        }
+
                         property var catEmojis: {
                             let sourceList = [];
                             if (catName === "Favorites") {
@@ -4596,7 +4421,7 @@ PlasmoidItem {
                                             visible: catHeader.isExpanded
 
                                             Repeater {
-                                                model: catEmojis
+                                                model: (catHeader.isExpanded && categoryColumn.shouldRender) ? catEmojis : []
 
                                                 delegate: Loader {
                                                     width: fullRoot.internalGridSize
@@ -4690,7 +4515,7 @@ PlasmoidItem {
                                             visible: catHeader.isExpanded && catKitchens.length > 0
 
                                             Repeater {
-                                                model: catKitchens
+                                                model: (catHeader.isExpanded && categoryColumn.shouldRender) ? catKitchens : []
 
                                                 delegate: Loader {
                                                     width: Math.max(48, Math.floor(fullRoot.internalGridSize * 1.2))
