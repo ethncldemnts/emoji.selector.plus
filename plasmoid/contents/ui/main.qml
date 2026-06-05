@@ -14,9 +14,10 @@ import org.kde.plasma.extras as PlasmaExtras
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.plasma5support as Plasma5Support
 
-// MAIN
-
 PlasmoidItem {
+
+    // MAIN
+
     id: root
 
     Plasmoid.icon: "preferences-desktop-emoticons-symbolic"
@@ -98,8 +99,6 @@ PlasmoidItem {
                             all.push(list[i].emoji);
                         }
                         emojiIcons = all;
-                    } else {
-                        emojiIcons = ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕"];
                     }
                 }
                 if (emojiIcons.length > 0) {
@@ -2636,7 +2635,6 @@ PlasmoidItem {
 
                                     let active = items[activeIdx];
                                     
-                                    // Hide if scroll has completely passed the bottom of the active category
                                     if (currentY >= active.y + active.height) {
                                         return null;
                                     }
@@ -3505,7 +3503,6 @@ PlasmoidItem {
 
                                 let active = items[activeIdx];
                                 
-                                // Hide if scroll has completely passed the bottom of the active category
                                 if (currentY >= active.y + active.height) {
                                     return null;
                                 }
@@ -3540,7 +3537,6 @@ PlasmoidItem {
                                     } else {
                                         for (let i = 0; i < allEmojisRepeater.count; i++) {
                                             let item = allEmojisRepeater.itemAt(i);
-                                            // 40px offset: if the header is slightly below the top edge, consider it active
                                             if (item && item.visible && item.y <= currentY + 40) {
                                                 activeCat = item.catName;
                                             }
@@ -3584,7 +3580,6 @@ PlasmoidItem {
                                 for (let i = 0; i < allEmojisRepeater.count; i++) {
                                     let item = allEmojisRepeater.itemAt(i);
                                     if (item && item.catName === catName) {
-                                        // Scroll view needs to update contentY. We ensure it's expanded.
                                         let states = Object.assign({}, categoryStates);
                                         states[catName] = true;
                                         categoryStates = states;
@@ -3702,8 +3697,6 @@ PlasmoidItem {
                                 let calculated = Math.floor((kitchenView.width - 144) / 3);
                                 return Math.min(160, Math.max(32, calculated));
                             }
-
-
 
                             function updateResult() {
                                 if (kitchenHelperLoader.item && emoji1 !== "" && emoji2 !== "") {
@@ -4100,8 +4093,6 @@ PlasmoidItem {
                                 keyNavigationEnabled: fullRoot.emojiKeyboardNavigationEnabled
                                 keyNavigationWraps: fullRoot.emojiKeyboardNavigationEnabled
 
-
-
                                 HoverHandler {
                                     id: kitchenGridHoverHandler
                                     onHoveredChanged: {
@@ -4266,7 +4257,6 @@ PlasmoidItem {
                     }
                 }
 
-
                 Repeater {
                     id: allEmojisRepeater
                     model: ["Favorites", "Recent", "Smileys & Emotion", "People & Body", "Animals & Nature", "Food & Drink", "Activities", "Travel & Places", "Objects", "Symbols", "Flags"]
@@ -4274,6 +4264,7 @@ PlasmoidItem {
                         id: categoryColumn
                         width: parent.width
                         spacing: 0
+                        visible: catEmojis.length > 0 || catKitchens.length > 0
                         property string catName: modelData
 
                         property bool wasRendered: false
@@ -4337,481 +4328,18 @@ PlasmoidItem {
                             }
                             return sourceList;
                         }
-                        visible: catEmojis.length > 0 || catKitchens.length > 0
-
-                                        Item {
-                                            id: catHeader
-                                            width: parent.width
-                                            height: 32
-
-                                            property bool isExpanded: allEmojisView.categoryStates[catName] !== false
-
-                                            Rectangle {
-                                                anchors.fill: parent
-                                                color: catHeaderMouse.pressed ? Kirigami.Theme.highlightColor : (catHeaderMouse.containsMouse ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.1) : "transparent")
-                                                border.color: (catHeaderMouse.pressed || catHeaderMouse.containsMouse) ? Kirigami.Theme.highlightColor : "transparent"
-                                                border.width: 1
-                                                radius: 4
-                                            }
-
-                                            RowLayout {
-                                                anchors.fill: parent
-                                                anchors.leftMargin: 8
-                                                anchors.rightMargin: 8
-                                                spacing: 8
-
-                                                Item {
-                                                    implicitWidth: 16
-                                                    implicitHeight: 16
-                                                    Kirigami.Icon {
-                                                        anchors.centerIn: parent
-                                                        source: catHeader.isExpanded ? "go-down" : "go-next"
-                                                        width: 16
-                                                        height: 16
-                                                    }
-                                                }
-
-                                                PlasmaComponents.Label {
-                                                    text: catName
-                                                    font.bold: true
-                                                    font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 1.05
-                                                }
-
-                                                Rectangle {
-                                                    width: catCountLabel.contentWidth + 12
-                                                    height: 18
-                                                    radius: 9
-                                                    color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.2)
-
-                                                    PlasmaComponents.Label {
-                                                        id: catCountLabel
-                                                        anchors.centerIn: parent
-                                                        text: catEmojis.length + catKitchens.length
-                                                        font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                                        font.bold: true
-                                                        color: Kirigami.Theme.textColor
-                                                    }
-                                                }
-
-                                                Rectangle {
-                                                     Layout.fillWidth: true
-                                                     height: 1
-                                                     color: Kirigami.Theme.textColor
-                                                     opacity: 0.3
-                                                 }
-                                            }
-
-                                            MouseArea {
-                                                id: catHeaderMouse
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: function(mouse) {
-                                                    if (mouse.button === Qt.LeftButton) {
-                                                        allEmojisView.toggleCategory(catName);
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        Flow {
-                                            width: parent.width
-                                            spacing: 0
-                                            visible: catHeader.isExpanded
-
-                                            Repeater {
-                                                model: (catHeader.isExpanded && categoryColumn.shouldRender) ? catEmojis : []
-
-                                                delegate: Loader {
-                                                    width: fullRoot.internalGridSize
-                                                    height: fullRoot.internalGridSize
-                                                    asynchronous: true
-                                                    property var emojiData: modelData
-                                                    
-                                                    sourceComponent: Component {
-                                                        Item {
-                                                            anchors.fill: parent
-
-                                                            Item {
-                                                                anchors.fill: parent
-                                                                anchors.margins: 2
-
-                                                                Rectangle {
-                                                                    anchors.fill: parent
-                                                                    color: Kirigami.Theme.highlightColor
-                                                                    radius: 4
-                                                                    opacity: mouseArea.pressed ? 1.0 : (mouseArea.containsMouse ? 0.2 : 0)
-                                                                }
-
-                                                                Rectangle {
-                                                                    anchors.fill: parent
-                                                                    color: "transparent"
-                                                                    radius: 4
-                                                                    border.width: (mouseArea.pressed || mouseArea.containsMouse) ? 2 : 0
-                                                                    border.color: Kirigami.Theme.highlightColor
-                                                                }
-                                                            }
-
-                                                            Text {
-                                                                anchors.centerIn: parent
-                                                                text: emojiData.emoji
-                                                                font.pixelSize: Math.floor(fullRoot.internalGridSize * 0.7)
-                                                                horizontalAlignment: Text.AlignHCenter
-                                                                verticalAlignment: Text.AlignVCenter
-                                                                renderType: Text.NativeRendering
-                                                            }
-
-                                                            MouseArea {
-                                                                id: mouseArea
-                                                                anchors.fill: parent
-                                                                hoverEnabled: true
-                                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
-
-                                                                onEntered: {
-                                                                    fullRoot.emojiHoveredEmojiKey = emojiData.emoji;
-                                                                    fullRoot.hoveredEmojiName = emojiData.name;
-                                                                    fullRoot.emojiHoveredEmojiType = "emoji";
-                                                                }
-
-                                                                onExited: {
-                                                                    if (fullRoot.emojiHoveredEmojiKey === emojiData.emoji) {
-                                                                        fullRoot.emojiLastHoveredEmojiKey = emojiData.emoji;
-                                                                    }
-                                                                }
-
-                                                                onClicked: function (mouse) {
-                                                                    if (mouse.button === Qt.LeftButton) {
-                                                                        const isCtrl = mouse.modifiers & Qt.ControlModifier;
-                                                                        const isShift = mouse.modifiers & Qt.ShiftModifier;
-                                                                        const isAlt = mouse.modifiers & Qt.AltModifier;
-                                                                        handleEmojiSelected(emojiData.emoji, isCtrl, isShift, isAlt);
-                                                                    } else if (mouse.button === Qt.RightButton) {
-                                                                        var globalPos = mouseArea.mapToItem(fullRoot, mouse.x, mouse.y);
-                                                                        handleEmojiRightClicked(emojiData.emoji, emojiData, globalPos);
-                                                                    }
-                                                                }
-
-                                                                onPressAndHold: function (mouse) {
-                                                                    var globalPos = mouseArea.mapToItem(fullRoot, mouse.x, mouse.y);
-                                                                    handleEmojiRightClicked(emojiData.emoji, emojiData, globalPos);
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        Item {
-                                            width: parent.width
-                                            height: 6
-                                            visible: catHeader.isExpanded && catEmojis.length > 0 && catKitchens.length > 0
-                                        }
-
-                                        Flow {
-                                            width: parent.width
-                                            spacing: 8
-                                            visible: catHeader.isExpanded && catKitchens.length > 0
-
-                                            Repeater {
-                                                model: (catHeader.isExpanded && categoryColumn.shouldRender) ? catKitchens : []
-
-                                                delegate: Loader {
-                                                    width: Math.max(48, Math.floor(fullRoot.internalGridSize * 1.2))
-                                                    height: Math.max(48, Math.floor(fullRoot.internalGridSize * 1.2))
-                                                    asynchronous: true
-                                                    property var kitchenData: modelData
-                                                    
-                                                    sourceComponent: Component {
-                                                        Item {
-                                                            anchors.fill: parent
-
-                                                            Rectangle {
-                                                                anchors.fill: parent
-                                                                color: Kirigami.Theme.alternateBackgroundColor
-                                                                border.color: (kitchenHoverHandler.hovered || kitchenMouseArea.pressed) ? Kirigami.Theme.highlightColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
-                                                                border.width: (kitchenHoverHandler.hovered || kitchenMouseArea.pressed) ? 2 : 1
-                                                                radius: 8
-
-                                                                Image {
-                                                                    anchors.fill: parent
-                                                                    anchors.margins: 4
-                                                                    source: kitchenData.url
-                                                                    sourceSize: Qt.size(128, 128)
-                                                                    fillMode: Image.PreserveAspectFit
-                                                                    smooth: true
-                                                                    mipmap: true
-                                                                }
-
-                                                                HoverHandler {
-                                                                    id: kitchenHoverHandler
-                                                                    onHoveredChanged: {
-                                                                        if (hovered) {
-                                                                            fullRoot.emojiHoveredEmojiKey = (kitchenData.emoji1 && kitchenData.emoji2) ? (kitchenData.emoji1 + " + " + kitchenData.emoji2) : "";
-                                                                            fullRoot.hoveredEmojiName = (kitchenData.emoji1 && kitchenData.emoji2) ? (kitchenData.emoji1 + " + " + kitchenData.emoji2) : i18n("Emoji Kitchen Mashup");
-                                                                            fullRoot.emojiHoveredEmojiType = "kitchen";
-                                                                            fullRoot.emojiHoveredKitchenUrl = kitchenData.url;
-                                                                        } else {
-                                                                            if (fullRoot.emojiHoveredKitchenUrl === kitchenData.url) {
-                                                                                fullRoot.emojiHoveredEmojiKey = "";
-                                                                                fullRoot.hoveredEmojiName = "";
-                                                                                fullRoot.emojiHoveredKitchenUrl = "";
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-
-                                                                MouseArea {
-                                                                    id: kitchenMouseArea
-                                                                    anchors.fill: parent
-                                                                    hoverEnabled: true
-                                                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                                                    cursorShape: Qt.PointingHandCursor
-                                                                    onClicked: function(mouse) {
-                                                                        if (mouse.button === Qt.LeftButton) {
-                                                                            let cmd = 'curl -sL "' + kitchenData.url + '" > /tmp/kmoji_copy.png && (wl-copy --type image/png < /tmp/kmoji_copy.png || xclip -selection clipboard -t image/png -i /tmp/kmoji_copy.png)';
-                                                                            shellSource.connectSource(cmd);
-                                                                            showPasteTemporaryMessage(i18n("Copied mashup to clipboard!"));
-
-                                                                            fullRoot.addRecentItem("kitchen", kitchenData);
-
-                                                                            if (plasmoid.configuration.CloseAfterSelection) {
-                                                                                if (fullRoot.plasmoidItem)
-                                                                                    fullRoot.plasmoidItem.expanded = false;
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-
-                                                                PlasmaComponents.ToolButton {
-                                                                    anchors.top: parent.top
-                                                                    anchors.right: parent.right
-                                                                    anchors.margins: 2
-                                                                    icon.name: fullRoot.isFavoriteItem("kitchen", {
-                                                                        url: kitchenData.url
-                                                                    }) ? "bookmarks-bookmarked" : "bookmarks"
-                                                                    visible: kitchenHoverHandler.hovered
-                                                                    width: 18
-                                                                    height: 18
-                                                                    display: PlasmaComponents.ToolButton.IconOnly
-                                                                    z: 10
-
-                                                                    background: Rectangle {
-                                                                        color: parent.pressed ? Kirigami.Theme.highlightColor : (parent.hovered ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.35) : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.85))
-                                                                        radius: 3
-                                                                        border.color: (parent.pressed || parent.hovered) ? Kirigami.Theme.highlightColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
-                                                                        border.width: 1
-                                                                    }
-
-                                                                    onClicked: {
-                                                                        fullRoot.toggleFavoriteItem("kitchen", kitchenData);
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Component {
-                            id: favRecGifDelegate
-
-                            PC3.ItemDelegate {
-                                id: favRecDelegateItem
-                                property var itemData: model
-                                width: favRecentsMasonryRow.columnWidth
-                                height: Math.floor(width / (itemData.aspectRatio || 1.0))
-
-                                onClicked: {
-                                    gifView.copyGif(itemData.rawUrl, itemData.title, itemData.webpUrl, itemData.previewUrl, itemData.aspectRatio || 1.0);
-                                    if (plasmoid.configuration.CloseAfterSelection) {
-                                        if (fullRoot.plasmoidItem)
-                                        fullRoot.plasmoidItem.expanded = false;
-                                    }
-                                }
-
-                                HoverHandler {
-                                    id: favRecGifDelegateHover
-                                    cursorShape: Qt.PointingHandCursor
-                                    onHoveredChanged: {
-                                        if (hovered) {
-                                            fullRoot.hoveredGifTitle = itemData.title;
-                                            fullRoot.hoveredGifUrl = itemData.previewUrl;
-                                        } else {
-                                            if (fullRoot.hoveredGifUrl === itemData.previewUrl) {
-                                                fullRoot.hoveredGifTitle = "";
-                                                fullRoot.hoveredGifUrl = "";
-                                            }
-                                        }
-                                    }
-                                }
-
-                                PlasmaComponents.ToolButton {
-                                    anchors.top: parent.top
-                                    anchors.right: parent.right
-                                    anchors.margins: 6
-                                    icon.name: fullRoot.isFavoriteItem("gif", {
-                                        rawUrl: itemData.rawUrl
-                                    }) ? "bookmarks-bookmarked" : "bookmarks"
-                                    visible: favRecGifDelegateHover.hovered
-                                    width: 28
-                                    height: 28
-                                    display: PlasmaComponents.ToolButton.IconOnly
-                                    z: 10
-
-                                    background: Rectangle {
-                                        color: parent.pressed ? Kirigami.Theme.highlightColor : (parent.hovered ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.35) : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.85))
-                                        radius: 4
-                                        border.color: (parent.pressed || parent.hovered) ? Kirigami.Theme.highlightColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
-                                        border.width: 1
-                                    }
-
-                                    onClicked: {
-                                        fullRoot.toggleFavoriteItem("gif", {
-                                            rawUrl: itemData.rawUrl,
-                                            title: itemData.title,
-                                            webpUrl: itemData.webpUrl || itemData.rawUrl,
-                                            previewUrl: itemData.previewUrl,
-                                            aspectRatio: itemData.aspectRatio
-                                        });
-                                    }
-                                }
-
-                                background: Rectangle {
-                                    anchors.fill: parent
-                                    anchors.margins: 2
-                                    color: Kirigami.Theme.alternateBackgroundColor
-                                    radius: 6
-                                    border.width: favRecGifDelegateHover.hovered ? 2 : 0
-                                    border.color: Kirigami.Theme.highlightColor
-
-                                    AnimatedImage {
-                                        source: fullRoot.isWidgetExpanded ? itemData.previewUrl : ""
-                                        anchors.fill: parent
-                                        anchors.margins: favRecGifDelegateHover.hovered ? 1 : 2
-                                        fillMode: Image.Stretch
-                                        playing: alwaysAnimateGifs || favRecGifDelegateHover.hovered
-                                        paused: !playing
-                                        cache: true
-                                    }
-                                }
-                            }
-                        }
 
                         Item {
-                            id: floatingStickyHeaderKaomoji
-                            anchors.left: kaomojiView.left
-                            anchors.right: kaomojiView.right
-                            anchors.rightMargin: kaomojiView.ScrollBar.vertical.visible ? kaomojiView.ScrollBar.vertical.width : 0
+                            id: catHeader
+                            width: parent.width
                             height: 32
-                            y: kaomojiView.activeStickyInfo ? kaomojiView.activeStickyInfo.offset : 0
-                            z: 10
-                            
-                            visible: kaomojiView.visible && kaomojiView.activeStickyInfo !== null
-                            
-                            readonly property var info: kaomojiView.activeStickyInfo
-                            property string catName: info ? info.catName : ""
-                            property bool isExpanded: info ? info.isExpanded : false
-                            property int count: info ? info.count : 0
-                            
-                            Rectangle {
-                                anchors.fill: parent
-                                color: Kirigami.Theme.backgroundColor
-                                opacity: 0.95
-                            }
-                            
-                            Rectangle {
-                                anchors.fill: parent
-                                color: stickyHeaderMouseKaomoji.pressed ? Kirigami.Theme.highlightColor : (stickyHeaderMouseKaomoji.containsMouse ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.1) : "transparent")
-                                border.color: (stickyHeaderMouseKaomoji.pressed || stickyHeaderMouseKaomoji.containsMouse) ? Kirigami.Theme.highlightColor : "transparent"
-                                border.width: 1
-                                radius: 4
-                            }
-                            
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 8
-                                anchors.rightMargin: 8
-                                spacing: 8
-                                
-                                Item {
-                                    implicitWidth: 16
-                                    implicitHeight: 16
-                                    Kirigami.Icon {
-                                        anchors.centerIn: parent
-                                        source: floatingStickyHeaderKaomoji.isExpanded ? "go-down" : "go-next"
-                                        width: 16
-                                        height: 16
-                                    }
-                                }
-                                
-                                PlasmaComponents.Label {
-                                    text: floatingStickyHeaderKaomoji.catName
-                                    font.bold: true
-                                    font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 1.05
-                                }
-                                
-                                PlasmaComponents.Label {
-                                    text: floatingStickyHeaderKaomoji.count
-                                    font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 0.9
-                                    color: Kirigami.Theme.disabledTextColor
-                                }
-                                
-                                Rectangle {
-                                     Layout.fillWidth: true
-                                     height: 1
-                                     color: Kirigami.Theme.textColor
-                                     opacity: 0.3
-                                 }
-                            }
-                            
-                            MouseArea {
-                                id: stickyHeaderMouseKaomoji
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: function(mouse) {
-                                    if (mouse.button === Qt.LeftButton && floatingStickyHeaderKaomoji.catName !== "") {
-                                        kaomojiView.toggleCategory(floatingStickyHeaderKaomoji.catName);
-                                    }
-                                }
-                            }
-                        }
 
-                        Item {
-                            id: floatingStickyHeader
-                            x: 0
-                            y: allEmojisView.activeStickyInfo ? allEmojisView.activeStickyInfo.offset : 0
-                            width: allEmojisView.width - (allEmojisView.ScrollBar.vertical.visible ? allEmojisView.ScrollBar.vertical.width : 0)
-                            height: 32
-                            z: 10
-                            visible: allEmojisView.visible && allEmojisView.activeStickyInfo !== null
-
-                            readonly property var info: allEmojisView.activeStickyInfo
-                            readonly property string catName: info ? info.name : ""
-                            readonly property bool isKitchen: info ? info.isKitchen : false
-                            readonly property bool isExpanded: info ? (allEmojisView.categoryStates[catName] !== false) : true
-                            readonly property int count: {
-                                if (!info || isKitchen) return 0;
-                                return (info.item && info.item.catEmojis) ? (info.item.catEmojis.length + info.item.catKitchens.length) : 0;
-                            }
+                            property bool isExpanded: allEmojisView.categoryStates[catName] !== false
 
                             Rectangle {
                                 anchors.fill: parent
-                                color: Kirigami.Theme.backgroundColor
-                            }
-
-                            Rectangle {
-                                anchors.fill: parent
-                                color: stickyHeaderMouse.pressed ? Kirigami.Theme.highlightColor : (stickyHeaderMouse.containsMouse ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.1) : "transparent")
-                                border.color: (stickyHeaderMouse.pressed || stickyHeaderMouse.containsMouse) ? Kirigami.Theme.highlightColor : "transparent"
+                                color: catHeaderMouse.pressed ? Kirigami.Theme.highlightColor : (catHeaderMouse.containsMouse ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.1) : "transparent")
+                                border.color: (catHeaderMouse.pressed || catHeaderMouse.containsMouse) ? Kirigami.Theme.highlightColor : "transparent"
                                 border.width: 1
                                 radius: 4
                             }
@@ -4827,29 +4355,28 @@ PlasmoidItem {
                                     implicitHeight: 16
                                     Kirigami.Icon {
                                         anchors.centerIn: parent
-                                        source: floatingStickyHeader.isExpanded ? "go-down" : "go-next"
+                                        source: catHeader.isExpanded ? "go-down" : "go-next"
                                         width: 16
                                         height: 16
                                     }
                                 }
 
                                 PlasmaComponents.Label {
-                                    text: floatingStickyHeader.isKitchen ? i18n("Emoji Kitchen") : floatingStickyHeader.catName
+                                    text: catName
                                     font.bold: true
                                     font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 1.05
                                 }
 
                                 Rectangle {
-                                    width: stickyCountLabel.contentWidth + 12
+                                    width: catCountLabel.contentWidth + 12
                                     height: 18
                                     radius: 9
                                     color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.2)
-                                    visible: !floatingStickyHeader.isKitchen
 
                                     PlasmaComponents.Label {
-                                        id: stickyCountLabel
+                                        id: catCountLabel
                                         anchors.centerIn: parent
-                                        text: floatingStickyHeader.count
+                                        text: catEmojis.length + catKitchens.length
                                         font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                         font.bold: true
                                         color: Kirigami.Theme.textColor
@@ -4857,25 +4384,592 @@ PlasmoidItem {
                                 }
 
                                 Rectangle {
-                                    Layout.fillWidth: true
-                                    height: 1
-                                    color: Kirigami.Theme.textColor
-                                    opacity: 0.3
-                                }
+                                     Layout.fillWidth: true
+                                     height: 1
+                                     color: Kirigami.Theme.textColor
+                                     opacity: 0.3
+                                 }
                             }
 
                             MouseArea {
-                                id: stickyHeaderMouse
+                                id: catHeaderMouse
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                acceptedButtons: Qt.LeftButton
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: function(mouse) {
-                                    if (mouse.button === Qt.LeftButton && floatingStickyHeader.catName !== "") {
-                                        allEmojisView.toggleCategory(floatingStickyHeader.catName);
+                                    if (mouse.button === Qt.LeftButton) {
+                                        allEmojisView.toggleCategory(catName);
                                     }
                                 }
                             }
+                        }
+
+                        Flow {
+                            width: parent.width
+                            spacing: 0
+                            visible: catHeader.isExpanded
+
+                            Repeater {
+                                model: (catHeader.isExpanded && categoryColumn.shouldRender) ? catEmojis : []
+
+                                delegate: Loader {
+                                    width: fullRoot.internalGridSize
+                                    height: fullRoot.internalGridSize
+                                    asynchronous: true
+                                    property var emojiData: modelData
+                                    
+                                    sourceComponent: Component {
+                                        Item {
+                                            anchors.fill: parent
+
+                                            Item {
+                                                anchors.fill: parent
+                                                anchors.margins: 2
+
+                                                Rectangle {
+                                                    anchors.fill: parent
+                                                    color: Kirigami.Theme.highlightColor
+                                                    radius: 4
+                                                    opacity: mouseArea.pressed ? 1.0 : (mouseArea.containsMouse ? 0.2 : 0)
+                                                }
+
+                                                Rectangle {
+                                                    anchors.fill: parent
+                                                    color: "transparent"
+                                                    radius: 4
+                                                    border.width: (mouseArea.pressed || mouseArea.containsMouse) ? 2 : 0
+                                                    border.color: Kirigami.Theme.highlightColor
+                                                }
+                                            }
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: emojiData.emoji
+                                                font.pixelSize: Math.floor(fullRoot.internalGridSize * 0.7)
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                                renderType: Text.NativeRendering
+                                            }
+
+                                            MouseArea {
+                                                id: mouseArea
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+
+                                                onEntered: {
+                                                    fullRoot.emojiHoveredEmojiKey = emojiData.emoji;
+                                                    fullRoot.hoveredEmojiName = emojiData.name;
+                                                    fullRoot.emojiHoveredEmojiType = "emoji";
+                                                }
+
+                                                onExited: {
+                                                    if (fullRoot.emojiHoveredEmojiKey === emojiData.emoji) {
+                                                        fullRoot.emojiLastHoveredEmojiKey = emojiData.emoji;
+                                                    }
+                                                }
+
+                                                onClicked: function (mouse) {
+                                                    if (mouse.button === Qt.LeftButton) {
+                                                        const isCtrl = mouse.modifiers & Qt.ControlModifier;
+                                                        const isShift = mouse.modifiers & Qt.ShiftModifier;
+                                                        const isAlt = mouse.modifiers & Qt.AltModifier;
+                                                        handleEmojiSelected(emojiData.emoji, isCtrl, isShift, isAlt);
+                                                    } else if (mouse.button === Qt.RightButton) {
+                                                        var globalPos = mouseArea.mapToItem(fullRoot, mouse.x, mouse.y);
+                                                        handleEmojiRightClicked(emojiData.emoji, emojiData, globalPos);
+                                                    }
+                                                }
+
+                                                onPressAndHold: function (mouse) {
+                                                    var globalPos = mouseArea.mapToItem(fullRoot, mouse.x, mouse.y);
+                                                    handleEmojiRightClicked(emojiData.emoji, emojiData, globalPos);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Item {
+                            width: parent.width
+                            height: 6
+                            visible: catHeader.isExpanded && catEmojis.length > 0 && catKitchens.length > 0
+                        }
+
+                        Flow {
+                            width: parent.width
+                            spacing: 8
+                            visible: catHeader.isExpanded && catKitchens.length > 0
+
+                            Repeater {
+                                model: (catHeader.isExpanded && categoryColumn.shouldRender) ? catKitchens : []
+
+                                delegate: Loader {
+                                    width: Math.max(48, Math.floor(fullRoot.internalGridSize * 1.2))
+                                    height: Math.max(48, Math.floor(fullRoot.internalGridSize * 1.2))
+                                    asynchronous: true
+                                    property var kitchenData: modelData
+                                    
+                                    sourceComponent: Component {
+                                        Item {
+                                            anchors.fill: parent
+
+                                            Rectangle {
+                                                anchors.fill: parent
+                                                color: Kirigami.Theme.alternateBackgroundColor
+                                                border.color: (kitchenHoverHandler.hovered || kitchenMouseArea.pressed) ? Kirigami.Theme.highlightColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
+                                                border.width: (kitchenHoverHandler.hovered || kitchenMouseArea.pressed) ? 2 : 1
+                                                radius: 8
+
+                                                Image {
+                                                    anchors.fill: parent
+                                                    anchors.margins: 4
+                                                    source: kitchenData.url
+                                                    sourceSize: Qt.size(128, 128)
+                                                    fillMode: Image.PreserveAspectFit
+                                                    smooth: true
+                                                    mipmap: true
+                                                }
+
+                                                HoverHandler {
+                                                    id: kitchenHoverHandler
+                                                    onHoveredChanged: {
+                                                        if (hovered) {
+                                                            fullRoot.emojiHoveredEmojiKey = (kitchenData.emoji1 && kitchenData.emoji2) ? (kitchenData.emoji1 + " + " + kitchenData.emoji2) : "";
+                                                            fullRoot.hoveredEmojiName = (kitchenData.emoji1 && kitchenData.emoji2) ? (kitchenData.emoji1 + " + " + kitchenData.emoji2) : i18n("Emoji Kitchen Mashup");
+                                                            fullRoot.emojiHoveredEmojiType = "kitchen";
+                                                            fullRoot.emojiHoveredKitchenUrl = kitchenData.url;
+                                                        } else {
+                                                            if (fullRoot.emojiHoveredKitchenUrl === kitchenData.url) {
+                                                                fullRoot.emojiHoveredEmojiKey = "";
+                                                                fullRoot.hoveredEmojiName = "";
+                                                                fullRoot.emojiHoveredKitchenUrl = "";
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                MouseArea {
+                                                    id: kitchenMouseArea
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: function(mouse) {
+                                                        if (mouse.button === Qt.LeftButton) {
+                                                            let cmd = 'curl -sL "' + kitchenData.url + '" > /tmp/kmoji_copy.png && (wl-copy --type image/png < /tmp/kmoji_copy.png || xclip -selection clipboard -t image/png -i /tmp/kmoji_copy.png)';
+                                                            shellSource.connectSource(cmd);
+                                                            showPasteTemporaryMessage(i18n("Copied mashup to clipboard!"));
+
+                                                            fullRoot.addRecentItem("kitchen", kitchenData);
+
+                                                            if (plasmoid.configuration.CloseAfterSelection) {
+                                                                if (fullRoot.plasmoidItem)
+                                                                    fullRoot.plasmoidItem.expanded = false;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                PlasmaComponents.ToolButton {
+                                                    anchors.top: parent.top
+                                                    anchors.right: parent.right
+                                                    anchors.margins: 2
+                                                    icon.name: fullRoot.isFavoriteItem("kitchen", {
+                                                        url: kitchenData.url
+                                                    }) ? "bookmarks-bookmarked" : "bookmarks"
+                                                    visible: kitchenHoverHandler.hovered
+                                                    width: 18
+                                                    height: 18
+                                                    display: PlasmaComponents.ToolButton.IconOnly
+                                                    z: 10
+
+                                                    background: Rectangle {
+                                                        color: parent.pressed ? Kirigami.Theme.highlightColor : (parent.hovered ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.35) : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.85))
+                                                        radius: 3
+                                                        border.color: (parent.pressed || parent.hovered) ? Kirigami.Theme.highlightColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
+                                                        border.width: 1
+                                                    }
+
+                                                    onClicked: {
+                                                        fullRoot.toggleFavoriteItem("kitchen", kitchenData);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Component {
+            id: favRecGifDelegate
+
+            PC3.ItemDelegate {
+                id: favRecDelegateItem
+                property var itemData: model
+                width: favRecentsMasonryRow.columnWidth
+                height: Math.floor(width / (itemData.aspectRatio || 1.0))
+
+                onClicked: {
+                    gifView.copyGif(itemData.rawUrl, itemData.title, itemData.webpUrl, itemData.previewUrl, itemData.aspectRatio || 1.0);
+                    if (plasmoid.configuration.CloseAfterSelection) {
+                        if (fullRoot.plasmoidItem)
+                            fullRoot.plasmoidItem.expanded = false;
+                    }
+                }
+
+                HoverHandler {
+                    id: favRecGifDelegateHover
+                    cursorShape: Qt.PointingHandCursor
+                    onHoveredChanged: {
+                        if (hovered) {
+                            fullRoot.hoveredGifTitle = itemData.title;
+                            fullRoot.hoveredGifUrl = itemData.previewUrl;
+                        } else {
+                            if (fullRoot.hoveredGifUrl === itemData.previewUrl) {
+                                fullRoot.hoveredGifTitle = "";
+                                fullRoot.hoveredGifUrl = "";
+                            }
+                        }
+                    }
+                }
+
+                PlasmaComponents.ToolButton {
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+                    anchors.margins: 6
+                    icon.name: fullRoot.isFavoriteItem("gif", {
+                        rawUrl: itemData.rawUrl
+                    }) ? "bookmarks-bookmarked" : "bookmarks"
+                    visible: favRecGifDelegateHover.hovered
+                    width: 28
+                    height: 28
+                    display: PlasmaComponents.ToolButton.IconOnly
+                    z: 10
+
+                    background: Rectangle {
+                        color: parent.pressed ? Kirigami.Theme.highlightColor : (parent.hovered ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.35) : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.85))
+                        radius: 4
+                        border.color: (parent.pressed || parent.hovered) ? Kirigami.Theme.highlightColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
+                        border.width: 1
+                    }
+
+                    onClicked: {
+                        fullRoot.toggleFavoriteItem("gif", {
+                            rawUrl: itemData.rawUrl,
+                            title: itemData.title,
+                            webpUrl: itemData.webpUrl || itemData.rawUrl,
+                            previewUrl: itemData.previewUrl,
+                            aspectRatio: itemData.aspectRatio
+                        });
+                    }
+                }
+
+                background: Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 2
+                    color: Kirigami.Theme.alternateBackgroundColor
+                    radius: 6
+                    border.width: favRecGifDelegateHover.hovered ? 2 : 0
+                    border.color: Kirigami.Theme.highlightColor
+
+                    AnimatedImage {
+                        source: fullRoot.isWidgetExpanded ? itemData.previewUrl : ""
+                        anchors.fill: parent
+                        anchors.margins: favRecGifDelegateHover.hovered ? 1 : 2
+                        fillMode: Image.Stretch
+                        playing: alwaysAnimateGifs || favRecGifDelegateHover.hovered
+                        paused: !playing
+                        cache: true
+                    }
+                }
+            }
+        }
+
+        Item {
+            id: floatingStickyHeaderKaomoji
+            anchors.left: kaomojiView.left
+            anchors.right: kaomojiView.right
+            anchors.rightMargin: kaomojiView.ScrollBar.vertical.visible ? kaomojiView.ScrollBar.vertical.width : 0
+            height: 32
+            y: kaomojiView.activeStickyInfo ? kaomojiView.activeStickyInfo.offset : 0
+            z: 10
+            
+            visible: kaomojiView.visible && kaomojiView.activeStickyInfo !== null
+            
+            readonly property var info: kaomojiView.activeStickyInfo
+            property string catName: info ? info.catName : ""
+            property bool isExpanded: info ? info.isExpanded : false
+            property int count: info ? info.count : 0
+            
+            Rectangle {
+                anchors.fill: parent
+                color: Kirigami.Theme.backgroundColor
+                opacity: 0.95
+            }
+            
+            Rectangle {
+                anchors.fill: parent
+                color: stickyHeaderMouseKaomoji.pressed ? Kirigami.Theme.highlightColor : (stickyHeaderMouseKaomoji.containsMouse ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.1) : "transparent")
+                border.color: (stickyHeaderMouseKaomoji.pressed || stickyHeaderMouseKaomoji.containsMouse) ? Kirigami.Theme.highlightColor : "transparent"
+                border.width: 1
+                radius: 4
+            }
+            
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 8
+                anchors.rightMargin: 8
+                spacing: 8
+                
+                Item {
+                    implicitWidth: 16
+                    implicitHeight: 16
+                    Kirigami.Icon {
+                        anchors.centerIn: parent
+                        source: floatingStickyHeaderKaomoji.isExpanded ? "go-down" : "go-next"
+                        width: 16
+                        height: 16
+                    }
+                }
+                
+                PlasmaComponents.Label {
+                    text: floatingStickyHeaderKaomoji.catName
+                    font.bold: true
+                    font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 1.05
+                }
+                
+                PlasmaComponents.Label {
+                    text: floatingStickyHeaderKaomoji.count
+                    font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 0.9
+                    color: Kirigami.Theme.disabledTextColor
+                }
+                
+                Rectangle {
+                     Layout.fillWidth: true
+                     height: 1
+                     color: Kirigami.Theme.textColor
+                     opacity: 0.3
+                 }
+            }
+            
+            MouseArea {
+                id: stickyHeaderMouseKaomoji
+                anchors.fill: parent
+                hoverEnabled: true
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                cursorShape: Qt.PointingHandCursor
+                onClicked: function(mouse) {
+                    if (mouse.button === Qt.LeftButton && floatingStickyHeaderKaomoji.catName !== "") {
+                        kaomojiView.toggleCategory(floatingStickyHeaderKaomoji.catName);
+                    }
+                }
+            }
+        }
+
+        Item {
+            id: floatingStickyHeader
+            x: 0
+            y: allEmojisView.activeStickyInfo ? allEmojisView.activeStickyInfo.offset : 0
+            width: allEmojisView.width - (allEmojisView.ScrollBar.vertical.visible ? allEmojisView.ScrollBar.vertical.width : 0)
+            height: 32
+            z: 10
+            visible: allEmojisView.visible && allEmojisView.activeStickyInfo !== null
+
+            readonly property var info: allEmojisView.activeStickyInfo
+            readonly property string catName: info ? info.name : ""
+            readonly property bool isKitchen: info ? info.isKitchen : false
+            readonly property bool isExpanded: info ? (allEmojisView.categoryStates[catName] !== false) : true
+            readonly property int count: {
+                if (!info || isKitchen) return 0;
+                return (info.item && info.item.catEmojis) ? (info.item.catEmojis.length + info.item.catKitchens.length) : 0;
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                color: Kirigami.Theme.backgroundColor
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                color: stickyHeaderMouse.pressed ? Kirigami.Theme.highlightColor : (stickyHeaderMouse.containsMouse ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.1) : "transparent")
+                border.color: (stickyHeaderMouse.pressed || stickyHeaderMouse.containsMouse) ? Kirigami.Theme.highlightColor : "transparent"
+                border.width: 1
+                radius: 4
+            }
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 8
+                anchors.rightMargin: 8
+                spacing: 8
+
+                Item {
+                    implicitWidth: 16
+                    implicitHeight: 16
+                    Kirigami.Icon {
+                        anchors.centerIn: parent
+                        source: floatingStickyHeader.isExpanded ? "go-down" : "go-next"
+                        width: 16
+                        height: 16
+                    }
+                }
+
+                PlasmaComponents.Label {
+                    text: floatingStickyHeader.isKitchen ? i18n("Emoji Kitchen") : floatingStickyHeader.catName
+                    font.bold: true
+                    font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 1.05
+                }
+
+                Rectangle {
+                    width: stickyCountLabel.contentWidth + 12
+                    height: 18
+                    radius: 9
+                    color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.2)
+                    visible: !floatingStickyHeader.isKitchen
+
+                    PlasmaComponents.Label {
+                        id: stickyCountLabel
+                        anchors.centerIn: parent
+                        text: floatingStickyHeader.count
+                        font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                        font.bold: true
+                        color: Kirigami.Theme.textColor
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 1
+                    color: Kirigami.Theme.textColor
+                    opacity: 0.3
+                }
+            }
+
+            MouseArea {
+                id: stickyHeaderMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                acceptedButtons: Qt.LeftButton
+                cursorShape: Qt.PointingHandCursor
+                onClicked: function(mouse) {
+                    if (mouse.button === Qt.LeftButton && floatingStickyHeader.catName !== "") {
+                        allEmojisView.toggleCategory(floatingStickyHeader.catName);
+                    }
+                }
+            }
+        }
+
+        ScrollView {
+            id: favRecentsView
+            anchors.fill: parent
+            visible: false
+            clip: true
+
+            readonly property int countEmojis: fullRoot.activeEmojis.length
+            readonly property int countGifs: fullRoot.activeGifs.length
+            readonly property int countKitchen: fullRoot.activeKitchens.length
+
+            property bool isEmojisExpanded: fullRoot.selectedCategory === fullRoot.catFavorites ? fullRoot.favoritesEmojisExpanded : fullRoot.recentEmojisExpanded
+            property bool isGifsExpanded: fullRoot.selectedCategory === fullRoot.catFavorites ? fullRoot.favoritesGifsExpanded : fullRoot.recentGifsExpanded
+            property bool isKitchenExpanded: fullRoot.selectedCategory === fullRoot.catFavorites ? fullRoot.favoritesKitchenExpanded : fullRoot.recentKitchenExpanded
+
+            function toggleEmojisExpanded() {
+                if (fullRoot.selectedCategory === fullRoot.catFavorites) {
+                    fullRoot.favoritesEmojisExpanded = !fullRoot.favoritesEmojisExpanded;
+                } else {
+                    fullRoot.recentEmojisExpanded = !fullRoot.recentEmojisExpanded;
+                }
+            }
+
+            function toggleGifsExpanded() {
+                if (fullRoot.selectedCategory === fullRoot.catFavorites) {
+                    fullRoot.favoritesGifsExpanded = !fullRoot.favoritesGifsExpanded;
+                } else {
+                    fullRoot.recentGifsExpanded = !fullRoot.recentGifsExpanded;
+                }
+            }
+
+            function toggleKitchenExpanded() {
+                if (fullRoot.selectedCategory === fullRoot.catFavorites) {
+                    fullRoot.favoritesKitchenExpanded = !fullRoot.favoritesKitchenExpanded;
+                } else {
+                    fullRoot.recentKitchenExpanded = !fullRoot.recentKitchenExpanded;
+                }
+            }
+
+            Column {
+                id: favRecentsMainLayout
+                x: 8
+                y: 8
+                width: favRecentsView.width - 16
+                spacing: 16
+
+                Column {
+                    width: parent.width
+                    spacing: 0
+                    visible: favRecentsView.countEmojis > 0
+
+                    Item {
+                        id: emojisHeader
+                        width: parent.width
+                        height: 32
+
+                        property bool isExpanded: favRecentsView.isEmojisExpanded
+                        property string title: i18n("Emojis")
+                        property int count: favRecentsView.countEmojis
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: emojisHeaderMouse.pressed ? Kirigami.Theme.highlightColor : (emojisHeaderMouse.containsMouse ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.1) : "transparent")
+                            border.color: (emojisHeaderMouse.pressed || emojisHeaderMouse.containsMouse) ? Kirigami.Theme.highlightColor : "transparent"
+                            border.width: 1
+                            radius: 4
+                        }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 4
+                            anchors.rightMargin: 4
+                            spacing: 8
+
+                            Item {
+                                implicitWidth: 16
+                                implicitHeight: 16
+                                Kirigami.Icon {
+                                    anchors.centerIn: parent
+                                    source: emojisHeader.isExpanded ? "go-down" : "go-next"
+                                    width: 16
+                                    height: 16
+                                }
+                            }
+
+                            PlasmaComponents.Label {
+                                text: emojisHeader.title
+                                font.bold: true
+                                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 1.05
+                            }
+
+                            Rectangle {
+                                width: emojisCountLabel.contentWidth + 12
+                                height: 18
+                                radius: 9
+                                color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.2)
+
+                                PlasmaComponents.Label {
+                                    id: emojisCountLabel
+                                    anchors.centerIn: parent
+                                    text: emojisHeader.count
+                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                    font.bold: true
                         }
 
                         ScrollView {
