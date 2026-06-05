@@ -470,7 +470,7 @@ Kirigami.ScrollablePage {
         }
 
         function executeScript() {
-            const scriptUrl = Qt.resolvedUrl('../../service/metadata.sh')
+            const scriptUrl = Qt.resolvedUrl('../../contents/service/metadata.sh')
             let path = scriptUrl.toString()
 
             if (path.startsWith("file://")) {

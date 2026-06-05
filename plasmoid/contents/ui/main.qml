@@ -348,7 +348,7 @@ PlasmoidItem {
             readonly property string catRecent: "Recent"
             readonly property string catEmojiKitchen: "Emoji Kitchen"
             readonly property string catGifs: "GIFs"
-            readonly property string catKaomoji: "Kaomoji"
+            readonly property string catKaomoji: "Kaomojis"
 
             property string hoveredGifTitle: ""
             property string hoveredGifUrl: ""
@@ -364,8 +364,13 @@ PlasmoidItem {
                 },
                 {
                     name: catKaomoji,
-                    displayName: i18n("Kaomoji"),
+                    displayName: i18n("Kaomojis"),
                     icon: "kstars_cbound-symbolic"
+                },
+                {
+                    name: catEmojiKitchen,
+                    displayName: i18n("Emoji Kitchen"),
+                    icon: "path-union-symbolic"
                 },
                 {
                     name: "Smileys & Emotion",
@@ -871,6 +876,26 @@ PlasmoidItem {
                 updateFilteredEmojis();
             }
 
+            function clearFavoriteKaomojis() {
+                favoriteEmojis = favoriteEmojis.filter(e => e.type !== "kaomoji");
+                try {
+                    settings.favoriteEmojisJson = JSON.stringify(favoriteEmojis);
+                } catch (e) {
+                    console.log("Failed to clear favorite kaomojis:", e);
+                }
+                updateFilteredEmojis();
+            }
+
+            function clearRecentKaomojis() {
+                recentEmojis = recentEmojis.filter(e => e.type !== "kaomoji");
+                try {
+                    settings.recentEmojisJson = JSON.stringify(recentEmojis);
+                } catch (e) {
+                    console.log("Failed to clear recent kaomojis:", e);
+                }
+                updateFilteredEmojis();
+            }
+
             function clearFavoriteGifs() {
                 favoriteEmojis = favoriteEmojis.filter(e => e.type !== "gif");
                 try {
@@ -1150,7 +1175,7 @@ PlasmoidItem {
             }
 
 
-            function handleEmojiSelected(emoji, isCtrlClick, isShiftClick, isAltClick) {
+            function handleEmojiSelected(emoji, isCtrlClick, isShiftClick, isAltClick, customType) {
                 if (!emoji) return;
                 const emojiObj = fullRoot.emojiList.find(e => e.emoji === emoji) || {
                     emoji: emoji,
@@ -1158,9 +1183,13 @@ PlasmoidItem {
                     slug: "",
                     group: ""
                 };
+                if (customType) {
+                    emojiObj.type = customType;
+                }
 
                 if (isAltClick) {
-                    fullRoot.toggleFavoriteEmoji(emojiObj);
+                    if (customType) fullRoot.toggleFavoriteItem(customType, emojiObj);
+                    else fullRoot.toggleFavoriteEmoji(emojiObj);
                     return;
                 }
 
@@ -1194,16 +1223,19 @@ PlasmoidItem {
                         if (isShiftClick) {
                             if (emojiObj.name && emojiObj.name.length > 0) {
                                 clipboard.content = emojiObj.name;
-                                addRecentEmoji(emojiObj);
+                                if (customType) addRecentItem(customType, emojiObj);
+                                else addRecentEmoji(emojiObj);
                                 showCopiedFeedback(emojiObj.name, emojiObj.emoji);
                             } else {
                                 clipboard.content = emoji;
-                                addRecentEmoji(emojiObj);
+                                if (customType) addRecentItem(customType, emojiObj);
+                                else addRecentEmoji(emojiObj);
                                 showCopiedFeedback(emoji, "");
                             }
                         } else {
                             clipboard.content = emoji;
-                            addRecentEmoji(emojiObj);
+                            if (customType) addRecentItem(customType, emojiObj);
+                            else addRecentEmoji(emojiObj);
                             showCopiedFeedback(emoji, emojiObj.name);
                         }
                     }
@@ -1371,14 +1403,36 @@ PlasmoidItem {
                         parsed = parsed.filter(item => item.name !== catFavorites && item.name !== catRecent);
 
                         var hasGifs = false;
+                        var hasKaomoji = false;
+                        var hasKitchen = false;
                         for (var k = 0; k < parsed.length; k++) {
                             if (parsed[k].name === catGifs) {
                                 hasGifs = true;
                                 parsed[k].icon = "fileview-preview-symbolic";
                             }
+                            if (parsed[k].name === catKaomoji) {
+                                hasKaomoji = true;
+                                parsed[k].icon = "kstars_cbound-symbolic";
+                            }
+                            if (parsed[k].name === catEmojiKitchen) {
+                                hasKitchen = true;
+                                parsed[k].icon = "path-union-symbolic";
+                            }
+                        }
+                        if (!hasKitchen) {
+                            parsed.unshift({
+                                name: catEmojiKitchen,
+                                icon: "path-union-symbolic"
+                            });
+                        }
+                        if (!hasKaomoji) {
+                            parsed.unshift({
+                                name: catKaomoji,
+                                icon: "kstars_cbound-symbolic"
+                            });
                         }
                         if (!hasGifs) {
-                            parsed.splice(0, 0, {
+                            parsed.unshift({
                                 name: catGifs,
                                 icon: "fileview-preview-symbolic"
                             });
@@ -2252,13 +2306,15 @@ PlasmoidItem {
                                                 var globalPos = mapToItem(fullRoot, mouse.x, mouse.y);
                                                 if (model.name === fullRoot.catGifs) {
                                                     gifSidebarContextMenu.popup(globalPos.x, globalPos.y);
+                                                } else if (model.name === fullRoot.catKaomoji) {
+                                                    kaomojiSidebarContextMenu.popup(globalPos.x, globalPos.y);
                                                 } else {
                                                     emojiSidebarContextMenu.popup(globalPos.x, globalPos.y);
                                                 }
                                                 mouse.accepted = true;
                                             } else if (fullRoot.draggedCategoryIndex !== index) {
                                                 fullRoot.selectedCategory = model.name;
-                                                if (model.name !== fullRoot.catGifs && model.name !== fullRoot.catEmojiKitchen) {
+                                                if (model.name !== fullRoot.catGifs) {
                                                     if (typeof allEmojisView !== "undefined") {
                                                         allEmojisView.scrollToCategory(model.name);
                                                     }
@@ -3107,24 +3163,46 @@ PlasmoidItem {
                             }
 
                             readonly property var activeStickyInfo: {
-                                let cy = contentY;
-                                let column = contentItem.children[0];
-                                if (!column) return null;
+                                if (!kaomojiView.contentItem || !kaomojiView.visible) return null;
+                                let cy = kaomojiView.contentItem.contentY;
+                                let column = kaomojiMainColumn;
+                                if (!column || !kaomojiParentRepeater || !kaomojiFavRecRepeater) return null;
                                 
                                 let activeItem = null;
                                 let activeY = 0;
                                 let nextY = Infinity;
                                 
-                                for (let p = 0; p < column.children.length; p++) {
-                                    let pCol = column.children[p];
-                                    if (!pCol || pCol.y === undefined) continue;
+                                for (let f = 0; f < kaomojiFavRecRepeater.count; f++) {
+                                    let subCol = kaomojiFavRecRepeater.itemAt(f);
+                                    if (!subCol || subCol.y === undefined || !subCol.visible) continue;
                                     
-                                    for (let k = 0; k < pCol.children.length; k++) {
-                                        let subCol = pCol.children[k];
+                                    let absY = subCol.y;
+                                    
+                                    if (absY <= cy) {
+                                        activeItem = subCol;
+                                        activeY = absY;
+                                    } else if (absY < nextY && absY > cy) {
+                                        nextY = absY;
+                                    }
+                                }
+                                
+                                for (let p = 0; p < kaomojiParentRepeater.count; p++) {
+                                    let pCol = kaomojiParentRepeater.itemAt(p);
+                                    if (!pCol || pCol.y === undefined || !pCol.visible) continue;
+                                    
+                                    let subRepeater = null;
+                                    for (let c = 0; c < pCol.children.length; c++) {
+                                        if (pCol.children[c].count !== undefined) {
+                                            subRepeater = pCol.children[c];
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (!subRepeater) continue;
+                                    
+                                    for (let k = 0; k < subRepeater.count; k++) {
+                                        let subCol = subRepeater.itemAt(k);
                                         if (!subCol || subCol.y === undefined || !subCol.visible) continue;
-                                        
-                                        let header = subCol.children[0];
-                                        if (!header || header.height === undefined) continue;
                                         
                                         let absY = pCol.y + subCol.y; 
                                         
@@ -3154,10 +3232,163 @@ PlasmoidItem {
                             }
 
                             Column {
+                                id: kaomojiMainColumn
                                 width: kaomojiView.width - (kaomojiView.ScrollBar.vertical.visible ? kaomojiView.ScrollBar.vertical.width : 0)
                                 spacing: 0
 
                                 Repeater {
+                                    id: kaomojiFavRecRepeater
+                                    model: ["Favorites", "Recent"]
+                                    delegate: Column {
+                                        width: parent.width
+                                        spacing: 0
+                                        property string catName: modelData
+                                        property var catEmojis: {
+                                            let sourceList = [];
+                                            if (catName === "Favorites") {
+                                                sourceList = (fullRoot.favoriteEmojis || []).filter(e => e.type === "kaomoji").map(e => e.emoji);
+                                            } else if (catName === "Recent") {
+                                                sourceList = (fullRoot.recentEmojis || []).filter(e => e.type === "kaomoji").slice(0, 36).map(e => e.emoji);
+                                            }
+                                            
+                                            if (kaomojiView.currentFilter && kaomojiView.currentFilter.trim() !== "") {
+                                                let lowerFilter = kaomojiView.currentFilter.toLowerCase().trim();
+                                                return sourceList.filter(e => {
+                                                    return (e || "").toLowerCase().indexOf(lowerFilter) !== -1;
+                                                });
+                                            }
+                                            return sourceList;
+                                        }
+                                        property var filteredEmojis: catEmojis
+                                        
+                                        visible: catEmojis.length > 0
+                                        
+                                        Item {
+                                            id: kaomojiFavRecCatHeader
+                                            width: parent.width
+                                            height: 32
+                                            property bool isExpanded: kaomojiView.categoryStates[catName] !== false
+                                            
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 8
+                                                anchors.rightMargin: 8
+                                                spacing: 8
+
+                                                Item {
+                                                    implicitWidth: 16
+                                                    implicitHeight: 16
+                                                    Kirigami.Icon {
+                                                        anchors.centerIn: parent
+                                                        source: kaomojiFavRecCatHeader.isExpanded ? "go-down" : "go-next"
+                                                        width: 16
+                                                        height: 16
+                                                    }
+                                                }
+
+                                                PlasmaComponents.Label {
+                                                    text: catName
+                                                    font.bold: true
+                                                    font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 1.05
+                                                }
+                                                
+                                                Rectangle {
+                                                     Layout.fillWidth: true
+                                                     height: 1
+                                                     color: Kirigami.Theme.textColor
+                                                     opacity: 0.3
+                                                }
+                                            }
+                                            
+                                            MouseArea {
+                                                id: kaomojiFavRecCatHeaderMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                acceptedButtons: Qt.LeftButton
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: function(mouse) {
+                                                    if (mouse.button === Qt.LeftButton) {
+                                                        kaomojiView.toggleCategory(catName);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        
+                                        Flow {
+                                            width: parent.width
+                                            spacing: 4
+                                            visible: kaomojiFavRecCatHeader.isExpanded
+                                            
+                                            Repeater {
+                                                model: filteredEmojis
+                                                delegate: Item {
+                                                    property string kaomojiText: modelData
+                                                    width: favRecKaomojiLabel.implicitWidth + 16
+                                                    height: 36
+
+                                                    Rectangle {
+                                                        anchors.fill: parent
+                                                        anchors.margins: 2
+                                                        color: Kirigami.Theme.highlightColor
+                                                        radius: 4
+                                                        opacity: favRecKaomojiMouseArea.pressed ? 1.0 : (favRecKaomojiMouseArea.containsMouse ? 0.2 : 0)
+                                                    }
+                                                    Rectangle {
+                                                        anchors.fill: parent
+                                                        anchors.margins: 2
+                                                        color: "transparent"
+                                                        radius: 4
+                                                        border.width: (favRecKaomojiMouseArea.pressed || favRecKaomojiMouseArea.containsMouse) ? 2 : 0
+                                                        border.color: Kirigami.Theme.highlightColor
+                                                    }
+
+                                                    PlasmaComponents.Label {
+                                                        id: favRecKaomojiLabel
+                                                        anchors.centerIn: parent
+                                                        text: kaomojiText
+                                                        font.pixelSize: Math.floor(fullRoot.internalGridSize * 0.4)
+                                                        renderType: Text.NativeRendering
+                                                    }
+
+                                                    MouseArea {
+                                                        id: favRecKaomojiMouseArea
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        
+                                                        onEntered: {
+                                                            fullRoot.emojiHoveredEmojiKey = kaomojiText;
+                                                            fullRoot.hoveredEmojiName = catName;
+                                                            fullRoot.emojiHoveredEmojiType = "kaomoji";
+                                                        }
+
+                                                        onExited: {
+                                                            if (fullRoot.emojiHoveredEmojiKey === kaomojiText) {
+                                                                fullRoot.emojiLastHoveredEmojiKey = kaomojiText;
+                                                            }
+                                                        }
+
+                                                        onClicked: function(mouse) {
+                                                            if (mouse.button === Qt.RightButton) {
+                                                                contextMenu.emoji = kaomojiText;
+                                                                contextMenu.emojiObj = { emoji: kaomojiText, type: "kaomoji" };
+                                                                contextMenu.type = "kaomoji";
+                                                                var globalPos = mapToItem(fullRoot, mouse.x, mouse.y);
+                                                                contextMenu.popup(globalPos.x, globalPos.y);
+                                                                return;
+                                                            }
+                                                            handleEmojiSelected(kaomojiText, false, false, false, "kaomoji");
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Repeater {
+                                    id: kaomojiParentRepeater
                                     model: KaomojiList.kaomojiList
                                     delegate: Column {
                                         width: parent.width
@@ -3165,6 +3396,7 @@ PlasmoidItem {
                                         property var parentCategory: modelData
                                         
                                         Repeater {
+                                            id: kaomojiSubRepeater
                                             model: parentCategory.categories
                                             delegate: Column {
                                                 width: parent.width
@@ -3192,7 +3424,6 @@ PlasmoidItem {
                                                     width: parent.width
                                                     height: 32
                                                     property bool isExpanded: kaomojiView.categoryStates[catName] !== false
-                                                    visible: (!kaomojiView.activeStickyInfo || kaomojiView.activeStickyInfo.catName !== catName || kaomojiView.activeStickyInfo.offset < 0)
 
                                                     Rectangle {
                                                         anchors.fill: parent
@@ -3287,7 +3518,7 @@ PlasmoidItem {
                                                                 id: kaomojiMouseArea
                                                                 anchors.fill: parent
                                                                 hoverEnabled: true
-                                                                acceptedButtons: Qt.LeftButton
+                                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
                                                                 cursorShape: Qt.PointingHandCursor
                                                                 
                                                                 onEntered: {
@@ -3303,7 +3534,15 @@ PlasmoidItem {
                                                                 }
 
                                                                 onClicked: function(mouse) {
-                                                                    handleEmojiSelected(kaomojiText, false, false, false);
+                                                                    if (mouse.button === Qt.RightButton) {
+                                                                        contextMenu.emoji = kaomojiText;
+                                                                        contextMenu.emojiObj = { emoji: kaomojiText, type: "kaomoji" };
+                                                                        contextMenu.type = "kaomoji";
+                                                                        var globalPos = mapToItem(fullRoot, mouse.x, mouse.y);
+                                                                        contextMenu.popup(globalPos.x, globalPos.y);
+                                                                        return;
+                                                                    }
+                                                                    handleEmojiSelected(kaomojiText, false, false, false, "kaomoji");
                                                                 }
                                                             }
                                                         }
@@ -3398,11 +3637,15 @@ PlasmoidItem {
                                     if (!allEmojisView.visible || scrollTimer.running) return;
                                     let currentY = allEmojisView.contentItem.contentY;
                                     let activeCat = "";
-                                    for (let i = 0; i < allEmojisRepeater.count; i++) {
-                                        let item = allEmojisRepeater.itemAt(i);
-                                        // 40px offset: if the header is slightly below the top edge, consider it active
-                                        if (item && item.visible && item.y <= currentY + 40) {
-                                            activeCat = item.catName;
+                                    if (emojiKitchenSection && emojiKitchenSection.visible && emojiKitchenSection.y <= currentY + 40 && currentY + 40 < emojiKitchenSection.y + emojiKitchenSection.height) {
+                                        activeCat = fullRoot.catEmojiKitchen;
+                                    } else {
+                                        for (let i = 0; i < allEmojisRepeater.count; i++) {
+                                            let item = allEmojisRepeater.itemAt(i);
+                                            // 40px offset: if the header is slightly below the top edge, consider it active
+                                            if (item && item.visible && item.y <= currentY + 40) {
+                                                activeCat = item.catName;
+                                            }
                                         }
                                     }
                                     if (activeCat !== "" && fullRoot.selectedCategory !== activeCat) {
@@ -3536,6 +3779,7 @@ PlasmoidItem {
                             id: kitchenView
                             width: parent.width
                             implicitHeight: kitchenGridView.y + kitchenGridView.height
+                            height: implicitHeight
                             property string emoji1: ""
                             property string emoji2: ""
                             property string resultUrl: ""
@@ -4634,7 +4878,7 @@ PlasmoidItem {
                                 }
                             }
                         }
-                        // Floating sticky header for Kaomoji
+
                         Item {
                             id: floatingStickyHeaderKaomoji
                             anchors.left: kaomojiView.left
@@ -5356,7 +5600,7 @@ PlasmoidItem {
                                 text: fullRoot.emojiHoveredEmojiKey
                                 font.pixelSize: (fullRoot.selectedCategory === fullRoot.catEmojiKitchen || fullRoot.emojiHoveredEmojiType === "kitchen") ? Math.floor((previewBar.height - 20) * 1.18) : (previewBar.height - 20)
                                 font.family: (fullRoot.selectedCategory === fullRoot.catEmojiKitchen || fullRoot.emojiHoveredEmojiType === "kitchen") ? "Noto Color Emoji" : Kirigami.Theme.defaultFont.family
-                                visible: fullRoot.selectedCategory !== fullRoot.catGifs && fullRoot.emojiHoveredEmojiKey !== "" && fullRoot.emojiHoveredKitchenUrl === ""
+                                visible: fullRoot.selectedCategory !== fullRoot.catGifs && fullRoot.emojiHoveredEmojiKey !== "" && fullRoot.emojiHoveredKitchenUrl === "" && fullRoot.emojiHoveredEmojiType !== "kaomoji"
                                 color: Kirigami.Theme.textColor
                                 renderType: Text.NativeRendering
                             }
@@ -5386,7 +5630,7 @@ PlasmoidItem {
                                 width: parent.height
                                 height: parent.height
                                 color: Kirigami.Theme.disabledTextColor
-                                visible: fullRoot.selectedCategory === fullRoot.catGifs ? (fullRoot.hoveredGifUrl === "") : (fullRoot.emojiHoveredEmojiKey === "" && fullRoot.emojiHoveredKitchenUrl === "")
+                                visible: fullRoot.selectedCategory === fullRoot.catGifs ? (fullRoot.hoveredGifUrl === "") : ((fullRoot.emojiHoveredEmojiKey === "" || fullRoot.emojiHoveredEmojiType === "kaomoji") && fullRoot.emojiHoveredKitchenUrl === "")
                             }
                         }
 
@@ -5396,6 +5640,9 @@ PlasmoidItem {
                             text: {
                                 if (fullRoot.selectedCategory === fullRoot.catGifs) {
                                     return fullRoot.hoveredGifTitle !== "" ? fullRoot.hoveredGifTitle : i18n("Hover over a GIF to animate it...");
+                                }
+                                if (fullRoot.emojiHoveredEmojiType === "kaomoji" && fullRoot.emojiHoveredEmojiKey !== "") {
+                                    return fullRoot.emojiHoveredEmojiKey;
                                 }
                                 return fullRoot.emojiHoveredEmojiKey !== "" ? fullRoot.hoveredEmojiName : i18n("Hover over an emoji for details...");
                             }
@@ -5413,19 +5660,21 @@ PlasmoidItem {
                 id: contextMenu
                 property string emoji: ""
                 property var emojiObj: null
+                property string type: "emoji"
 
                 PC3.MenuItem {
-                    text: i18n("Copy Emoji")
+                    text: contextMenu.type === "kaomoji" ? i18n("Copy Kaomoji") : i18n("Copy Emoji")
                     icon.name: "edit-copy"
                     onClicked: {
                         clipboard.content = contextMenu.emoji;
-                        showCopiedFeedback(contextMenu.emoji, contextMenu.emojiObj ? contextMenu.emojiObj.name : "");
+                        showCopiedFeedback(contextMenu.emoji, contextMenu.emojiObj && contextMenu.emojiObj.name ? contextMenu.emojiObj.name : "");
                     }
                 }
 
                 PC3.MenuItem {
                     text: i18n("Copy Name")
                     icon.name: "edit-copy"
+                    visible: contextMenu.type !== "kaomoji"
                     enabled: contextMenu.emojiObj && contextMenu.emojiObj.name && contextMenu.emojiObj.name.length > 0
                     onClicked: {
                         if (contextMenu.emojiObj && contextMenu.emojiObj.name && contextMenu.emojiObj.name.length > 0) {
@@ -5439,10 +5688,24 @@ PlasmoidItem {
                 }
 
                 PC3.MenuItem {
-                    text: isFavorite(contextMenu.emoji) ? i18n("Unfavorite Emoji") : i18n("Favorite Emoji")
-                    icon.name: isFavorite(contextMenu.emoji) ? "bookmarks" : "bookmarks-bookmarked"
+                    text: {
+                        if (contextMenu.type === "kaomoji") {
+                            return isFavoriteItem("kaomoji", { emoji: contextMenu.emoji }) ? i18n("Unfavorite Kaomoji") : i18n("Favorite Kaomoji")
+                        }
+                        return isFavorite(contextMenu.emoji) ? i18n("Unfavorite Emoji") : i18n("Favorite Emoji")
+                    }
+                    icon.name: {
+                        if (contextMenu.type === "kaomoji") {
+                            return isFavoriteItem("kaomoji", { emoji: contextMenu.emoji }) ? "bookmarks" : "bookmarks-bookmarked"
+                        }
+                        return isFavorite(contextMenu.emoji) ? "bookmarks" : "bookmarks-bookmarked"
+                    }
                     onClicked: {
-                        toggleFavoriteEmoji(contextMenu.emojiObj);
+                        if (contextMenu.type === "kaomoji") {
+                            toggleFavoriteItem("kaomoji", { emoji: contextMenu.emoji, type: "kaomoji" });
+                        } else {
+                            toggleFavoriteEmoji(contextMenu.emojiObj);
+                        }
                     }
                 }
             }
@@ -5483,6 +5746,26 @@ PlasmoidItem {
                     onClicked: {
                         clearRecentGifs();
                         showSearchTemporaryMessage(i18n("Cleared recent GIFs"));
+                    }
+                }
+            }
+
+            PC3.Menu {
+                id: kaomojiSidebarContextMenu
+                PC3.MenuItem {
+                    text: i18n("Clear Favorite Kaomojis")
+                    icon.name: "edit-clear"
+                    onClicked: {
+                        clearFavoriteKaomojis();
+                        showSearchTemporaryMessage(i18n("Cleared favorite kaomojis"));
+                    }
+                }
+                PC3.MenuItem {
+                    text: i18n("Clear Recent Kaomojis")
+                    icon.name: "edit-clear"
+                    onClicked: {
+                        clearRecentKaomojis();
+                        showSearchTemporaryMessage(i18n("Cleared recent kaomojis"));
                     }
                 }
             }
