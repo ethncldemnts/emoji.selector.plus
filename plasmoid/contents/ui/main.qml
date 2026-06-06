@@ -63,7 +63,6 @@ PlasmoidItem {
             id: compactRoot
 
             hoverEnabled: true
-            cursorShape: easterEggMode ? Qt.CrossCursor : Qt.PointingHandCursor
             acceptedButtons: Qt.LeftButton | Qt.MiddleButton
 
             property bool wasExpanded: false
@@ -106,7 +105,7 @@ PlasmoidItem {
                 }
             }
 
-            onPressed: {
+            onPressed: function(mouse) {
                 const target = expander();
                 wasExpanded = target ? target.expanded : false;
 
@@ -117,7 +116,7 @@ PlasmoidItem {
                 }
             }
 
-            onClicked: {
+            onClicked: function(mouse) {
                 const target = expander();
                 if (mouse.button === Qt.LeftButton) {
                     if (target) {
@@ -141,10 +140,6 @@ PlasmoidItem {
 
             Item {
                 anchors.fill: parent
-
-                HoverHandler {
-                    cursorShape: compactRoot.easterEggMode ? Qt.CrossCursor : Qt.PointingHandCursor
-                }
 
                 Kirigami.Icon {
                     id: defaultIcon
@@ -194,60 +189,6 @@ PlasmoidItem {
 
             property var plasmoidItem: null
 
-            Loader {
-                id: emojiHelperLoader
-                asynchronous: true
-                source: "../service/EmojiHelper.qml"
-                active: true
-                onLoaded: {
-                    if (item) {
-                        item.loadEmojis();
-                    }
-                }
-            }
-
-            Connections {
-                target: emojiHelperLoader.item ? emojiHelperLoader.item : null
-                function onEmojiListChanged() {
-                    populateKitchenEmojiList();
-                    updateFilteredEmojis();
-                }
-            }
-
-            Loader {
-                id: kitchenHelperLoader
-                asynchronous: true
-                source: "../service/KitchenHelper.qml"
-                active: (selectedCategory === catEmojiKitchen) || (allEmojisView && allEmojisView.categoryStates[catEmojiKitchen] === true)
-                onLoaded: {
-                    if (item && emojiList.length > 0) {
-                        populateKitchenEmojiList();
-                    }
-                }
-            }
-
-            Connections {
-                target: kitchenHelperLoader.active ? kitchenHelperLoader : null
-                function onStatusChanged() {
-                    if (kitchenHelperLoader.status === Loader.Ready && emojiList.length > 0) {
-                        populateKitchenEmojiList();
-                    }
-                }
-            }
-
-            Loader {
-                id: kaomojiHelperLoader
-                asynchronous: true
-                source: "../service/KaomojiHelper.qml"
-                active: (selectedCategory === catKaomoji)
-            }
-
-            Loader {
-                id: gifHelper
-                asynchronous: true
-                source: "../service/GifHelper.qml"
-                active: true
-            }
             readonly property bool isWidgetExpanded: fullRoot.plasmoidItem ? fullRoot.plasmoidItem.expanded : true
             property bool sidebarExpanded: false
             property bool isAnyCategoryDragging: false
@@ -402,6 +343,7 @@ PlasmoidItem {
 
             property var emojiList: emojiHelperLoader.item ? emojiHelperLoader.item.emojiList : []
             property string filter: ""
+            property string debouncedFilter: ""
             property string lastFilterForGroups: "-1"
             property var filteredEmojis: []
             property string selectedCategory: "Smileys & Emotion"
@@ -429,6 +371,110 @@ PlasmoidItem {
             property var activeGifs: []
             property var activeKitchens: []
 
+            readonly property int favRecentsNumColumns: Math.max(2, Math.min(4, Math.floor((fullRoot.width - 16) / gifPreferredWidth)))
+            property var activeGifCol0: []
+            property var activeGifCol1: []
+            property var activeGifCol2: []
+            property var activeGifCol3: []
+            property int _lastNumCols: -1
+
+            property bool gridIsMouseOver: false
+
+            property bool gridKeyboardActionPressed: false
+            property bool gridExternalKeyboardActionPressed: false
+
+            property bool pinButtonKeyboardPressed: false
+            property bool settingsButtonKeyboardPressed: false
+            property bool sidebarButtonKeyboardPressed: false
+            property bool gifIsLoading: false
+            property bool gifIsLoadingMore: false
+            property int gifCurrentPage: 1
+            property bool gifHasNextPage: false
+            property string gifLastQuery: ""
+            property string gifApiErrorMsg: ""
+            property var gifColModels: [gifCol0Model, gifCol1Model, gifCol2Model, gifCol3Model]
+            property var gifRawGifsList: []
+            property int gifCol0Height: 0
+            property int gifCol1Height: 0
+            property int gifCol2Height: 0
+            property int gifCol3Height: 0
+            property string kitchenEmoji1: ""
+            property string kitchenEmoji2: ""
+            property string kitchenResultUrl: ""
+            property string kitchenResultUrlAlternative: ""
+            property string kitchenActualSource: ""
+            property string kitchenCurrentValidUrl: ""
+            property var kitchenCandidatesList: []
+            property int kitchenCurrentCandidateIndex: 0
+            property int draggedCategoryIndex: -1
+
+            readonly property int favRecentsCountEmojis: activeEmojis.length
+            readonly property int favRecentsCountGifs: activeGifs.length
+            readonly property int favRecentsCountKitchen: activeKitchens.length
+            property bool favRecentsIsEmojisExpanded: selectedCategory === catFavorites ? favoritesEmojisExpanded : recentEmojisExpanded
+            property bool favRecentsIsGifsExpanded: selectedCategory === catFavorites ? favoritesGifsExpanded : recentGifsExpanded
+            property bool favRecentsIsKitchenExpanded: selectedCategory === catFavorites ? favoritesKitchenExpanded : recentKitchenExpanded
+
+            Loader {
+                id: emojiHelperLoader
+                asynchronous: true
+                source: "../service/EmojiHelper.qml"
+                active: true
+                onLoaded: {
+                    if (item) {
+                        item.loadEmojis();
+                    }
+                }
+            }
+
+            Connections {
+                target: emojiHelperLoader.item ? emojiHelperLoader.item : null
+                function onEmojiListChanged() {
+                    populateKitchenEmojiList();
+                    updateFilteredEmojis();
+                }
+            }
+
+            Loader {
+                id: kitchenHelperLoader
+                asynchronous: true
+                source: "../service/KitchenHelper.qml"
+                active: (selectedCategory === catEmojiKitchen) || (allEmojisView && allEmojisView.categoryStates[catEmojiKitchen] === true) || (typeof emojiKitchenSection !== "undefined" && emojiKitchenSection && emojiKitchenSection.shouldRender)
+                onLoaded: {
+                    if (item && emojiList.length > 0) {
+                        populateKitchenEmojiList();
+                    }
+                }
+            }
+
+            Connections {
+                target: kitchenHelperLoader.active ? kitchenHelperLoader : null
+                function onStatusChanged() {
+                    if (kitchenHelperLoader.status === Loader.Ready && emojiList.length > 0) {
+                        populateKitchenEmojiList();
+                    }
+                }
+            }
+
+            Loader {
+                id: kaomojiHelperLoader
+                asynchronous: true
+                source: "../service/KaomojiHelper.qml"
+                active: (selectedCategory === catKaomoji)
+                onLoaded: {
+                    if (!fullRoot.searchPlaceholderMessageActive) {
+                        fullRoot.resetSearchPlaceholder();
+                    }
+                }
+            }
+
+            Loader {
+                id: gifHelper
+                asynchronous: true
+                source: "../service/GifHelper.qml"
+                active: true
+            }
+
             function _updateActiveSubLists() {
                 if (selectedCategory !== catFavorites && selectedCategory !== catRecent) {
                     activeEmojis = [];
@@ -452,15 +498,9 @@ PlasmoidItem {
                 return activeKitchens;
             }
 
-            readonly property int favRecentsNumColumns: Math.max(2, Math.min(4, Math.floor((fullRoot.width - 16) / gifPreferredWidth)))
-            property var activeGifCol0: []
-            property var activeGifCol1: []
-            property var activeGifCol2: []
-            property var activeGifCol3: []
-            property int _lastNumCols: -1
-
             onActiveGifsChanged: _updateActiveGifCols(favRecentsNumColumns)
             onFavRecentsNumColumnsChanged: _updateActiveGifCols(favRecentsNumColumns)
+            onKitchenResultUrlChanged: kitchenActualSource = kitchenResultUrl
 
             function _updateActiveGifCols(numCols) {
                 _lastNumCols = numCols;
@@ -500,15 +540,6 @@ PlasmoidItem {
                 return activeGifCol3;
             }
 
-            property bool gridIsMouseOver: false
-
-            property bool gridKeyboardActionPressed: false
-            property bool gridExternalKeyboardActionPressed: false
-
-            property bool pinButtonKeyboardPressed: false
-            property bool settingsButtonKeyboardPressed: false
-            property bool sidebarButtonKeyboardPressed: false
-            property int draggedCategoryIndex: -1
 
             Settings {
                 id: settings
@@ -612,6 +643,10 @@ PlasmoidItem {
                             found = true;
                             continue;
                         }
+                        if (type === "kaomoji" && rec.emoji === item.emoji) {
+                            found = true;
+                            continue;
+                        }
                         if (type === "gif" && rec.rawUrl === item.rawUrl) {
                             found = true;
                             continue;
@@ -657,6 +692,8 @@ PlasmoidItem {
                     continue;
                     if (type === "emoji" && fav.emoji === item.emoji) {
                         return true;
+                    } else if (type === "kaomoji" && fav.emoji === item.emoji) {
+                        return true;
                     } else if (type === "gif" && fav.rawUrl === item.rawUrl) {
                         return true;
                     } else if (type === "kitchen" && fav.url === item.url) {
@@ -681,6 +718,8 @@ PlasmoidItem {
                     if (favType !== type)
                     return false;
                     if (type === "emoji")
+                    return e.emoji === item.emoji;
+                    if (type === "kaomoji")
                     return e.emoji === item.emoji;
                     if (type === "gif")
                     return e.rawUrl === item.rawUrl;
@@ -711,6 +750,8 @@ PlasmoidItem {
                     label = item.title || "Klipy GIF";
                 } else if (type === "kitchen") {
                     label = i18n("(%1 + %2)", item.emoji1, item.emoji2);
+                } else if (type === "kaomoji") {
+                    label = item.emoji;
                 }
 
                 showSearchTemporaryMessage(isFavoriteNow ? i18n("Favorited: %1", label) : i18n("Unfavorited: %1", label));
@@ -834,6 +875,16 @@ PlasmoidItem {
                 }
             }
 
+            Timer {
+                id: searchDebounceTimer
+                interval: 150
+                repeat: false
+                onTriggered: {
+                    fullRoot.debouncedFilter = fullRoot.filter;
+                    updateFilteredEmojis();
+                }
+            }
+
             function updateFilteredEmojis() {
                 if (selectedCategory === catGifs) {
                     filteredEmojis = [];
@@ -859,27 +910,35 @@ PlasmoidItem {
                     result = emojiByGroup[selectedCategory] || [];
                 }
 
-                if (filter && filter.trim() !== "") {
-                    result = performFilter(result, filter);
+                if (debouncedFilter && debouncedFilter.trim() !== "") {
+                    result = performFilter(result, debouncedFilter);
                 }
                 filteredEmojis = result;
 
-                if (fullRoot.lastFilterForGroups !== filter || Object.keys(filteredEmojiByGroup).length === 0) {
+                if (fullRoot.lastFilterForGroups !== debouncedFilter || Object.keys(filteredEmojiByGroup).length === 0) {
                     let groupResult = {};
                     const cats = ["Smileys & Emotion", "People & Body", "Animals & Nature", "Food & Drink", "Activities", "Travel & Places", "Objects", "Symbols", "Flags"];
                     for (let i = 0; i < cats.length; i++) {
                         let catEmojis = emojiByGroup[cats[i]] || [];
-                        if (filter && filter.trim() !== "") {
-                            catEmojis = performFilter(catEmojis, filter);
+                        if (debouncedFilter && debouncedFilter.trim() !== "") {
+                            catEmojis = performFilter(catEmojis, debouncedFilter);
                         }
                         groupResult[cats[i]] = catEmojis;
                     }
                     filteredEmojiByGroup = groupResult;
-                    fullRoot.lastFilterForGroups = filter;
+                    fullRoot.lastFilterForGroups = debouncedFilter;
                 }
             }
 
-            onFilterChanged: updateFilteredEmojis()
+            onFilterChanged: {
+                if (filter === "") {
+                    searchDebounceTimer.stop();
+                    fullRoot.debouncedFilter = "";
+                    updateFilteredEmojis();
+                } else {
+                    searchDebounceTimer.restart();
+                }
+            }
             onSelectedCategoryChanged: {
                 updateFilteredEmojis();
                 if (!fullRoot.searchPlaceholderMessageActive) {
@@ -1148,6 +1207,7 @@ PlasmoidItem {
             function handleEmojiRightClicked(emoji, emojiObj, globalPos) {
                 contextMenu.emoji = emoji;
                 contextMenu.emojiObj = emojiObj;
+                contextMenu.type = "emoji";
                 contextMenu.popup(globalPos.x, globalPos.y);
             }
 
@@ -1209,6 +1269,10 @@ PlasmoidItem {
             function getSearchPlaceholder() {
                 if (fullRoot.selectedCategory === catGifs) {
                     return i18n("Search GIFs...");
+                }
+                if (fullRoot.selectedCategory === catKaomoji) {
+                    let kaomojiCount = (kaomojiHelperLoader.item && kaomojiHelperLoader.item.totalCount) ? kaomojiHelperLoader.item.totalCount : 0;
+                    return i18n("Search %1 kaomojis...", kaomojiCount);
                 }
                 if (fullRoot.selectedCategory !== catFavorites && fullRoot.selectedCategory !== catRecent && fullRoot.selectedCategory !== catEmojiKitchen) {
                     return i18n("Search %1 emojis...", fullRoot.emojiList.length);
@@ -2202,11 +2266,17 @@ PlasmoidItem {
                                             if (mouse.button === Qt.RightButton) {
                                                 var globalPos = mapToItem(fullRoot, mouse.x, mouse.y);
                                                 if (model.name === fullRoot.catGifs) {
-                                                    gifSidebarContextMenu.popup(globalPos.x, globalPos.y);
+                                                    if (fullRoot.favoriteEmojis.some(e => e.type === "gif") || fullRoot.recentEmojis.some(e => e.type === "gif")) {
+                                                        gifSidebarContextMenu.popup(globalPos.x, globalPos.y);
+                                                    }
                                                 } else if (model.name === fullRoot.catKaomoji) {
-                                                    kaomojiSidebarContextMenu.popup(globalPos.x, globalPos.y);
+                                                    if (fullRoot.favoriteEmojis.some(e => e.type === "kaomoji") || fullRoot.recentEmojis.some(e => e.type === "kaomoji")) {
+                                                        kaomojiSidebarContextMenu.popup(globalPos.x, globalPos.y);
+                                                    }
                                                 } else {
-                                                    emojiSidebarContextMenu.popup(globalPos.x, globalPos.y);
+                                                    if (fullRoot.favoriteEmojis.some(e => !e.type || e.type === "emoji" || e.type === "kitchen") || fullRoot.recentEmojis.some(e => !e.type || e.type === "emoji" || e.type === "kitchen")) {
+                                                        emojiSidebarContextMenu.popup(globalPos.x, globalPos.y);
+                                                    }
                                                 }
                                                 mouse.accepted = true;
                                             } else if (fullRoot.draggedCategoryIndex !== index) {
@@ -2242,14 +2312,6 @@ PlasmoidItem {
                             anchors.fill: parent
                             visible: fullRoot.selectedCategory === fullRoot.catGifs
                             clip: true
-
-                            property bool isLoading: false
-                            property bool isLoadingMore: false
-                            property int currentPage: 1
-                            property bool hasNextPage: false
-                            property string lastQuery: ""
-                            property string apiErrorMsg: ""
-
                             ListModel {
                                 id: gifCol0Model
                             }
@@ -2262,12 +2324,6 @@ PlasmoidItem {
                             ListModel {
                                 id: gifCol3Model
                             }
-                            property var colModels: [gifCol0Model, gifCol1Model, gifCol2Model, gifCol3Model]
-                            property var rawGifsList: []
-                            property int gifCol0Height: 0
-                            property int gifCol1Height: 0
-                            property int gifCol2Height: 0
-                            property int gifCol3Height: 0
 
                             Connections {
                                 target: plasmoid.configuration
@@ -2346,7 +2402,7 @@ PlasmoidItem {
                                         }
                                     }
 
-                                    colModels[minCol].append({
+                                    fullRoot.gifColModels[minCol].append({
                                         title: item.title,
                                         rawUrl: item.rawUrl,
                                         previewUrl: item.previewUrl,
@@ -2357,10 +2413,10 @@ PlasmoidItem {
                                     colHeights[minCol] += cardHeight + space;
                                 }
 
-                                gifCol0Height = colHeights[0];
-                                gifCol1Height = colHeights[1];
-                                gifCol2Height = colHeights[2];
-                                gifCol3Height = colHeights[3];
+                                fullRoot.gifCol0Height = colHeights[0];
+                                fullRoot.gifCol1Height = colHeights[1];
+                                fullRoot.gifCol2Height = colHeights[2];
+                                fullRoot.gifCol3Height = colHeights[3];
                             }
 
                             function redistributeGifs() {
@@ -2368,33 +2424,33 @@ PlasmoidItem {
                                 gifCol1Model.clear();
                                 gifCol2Model.clear();
                                 gifCol3Model.clear();
-                                _processMasonryItems(rawGifsList, [0, 0, 0, 0]);
+                                _processMasonryItems(fullRoot.gifRawGifsList, [0, 0, 0, 0]);
                             }
 
                             function appendToColumns(newItems) {
-                                _processMasonryItems(newItems, [gifCol0Height, gifCol1Height, gifCol2Height, gifCol3Height]);
+                                _processMasonryItems(newItems, [fullRoot.gifCol0Height, fullRoot.gifCol1Height, fullRoot.gifCol2Height, fullRoot.gifCol3Height]);
                             }
 
                             function fetchGifs(query, append) {
-                                gifView.apiErrorMsg = "";
+                                fullRoot.gifApiErrorMsg = "";
                                 if (!append) {
-                                    gifView.currentPage = 1;
-                                    gifView.hasNextPage = false;
-                                    gifView.lastQuery = query || "";
-                                    gifView.isLoading = true;
+                                    fullRoot.gifCurrentPage = 1;
+                                    fullRoot.gifHasNextPage = false;
+                                    fullRoot.gifLastQuery = query || "";
+                                    fullRoot.gifIsLoading = true;
                                 } else {
-                                    gifView.isLoadingMore = true;
+                                    fullRoot.gifIsLoadingMore = true;
                                 }
 
-                                var page = append ? gifView.currentPage : 1;
+                                var page = append ? fullRoot.gifCurrentPage : 1;
                                 var url = gifHelper.item ? gifHelper.item.buildGifUrl(plasmoid.configuration.KlipyApiKey, query, page, 24) : "";
 
                                 var xhr = new XMLHttpRequest();
                                 xhr.open("GET", url);
                                 xhr.onreadystatechange = function () {
                                     if (xhr.readyState === XMLHttpRequest.DONE) {
-                                        gifView.isLoading = false;
-                                        gifView.isLoadingMore = false;
+                                        fullRoot.gifIsLoading = false;
+                                        fullRoot.gifIsLoadingMore = false;
                                         if (xhr.status === 200) {
                                             var response = JSON.parse(xhr.responseText);
                                             var responseData = response && response.data ? response.data : null;
@@ -2406,15 +2462,15 @@ PlasmoidItem {
                                             var parsed = gifHelper.item ? gifHelper.item.parseGifItems(response) : [];
 
                                             if (append) {
-                                                rawGifsList = rawGifsList.concat(parsed);
+                                                fullRoot.gifRawGifsList = fullRoot.gifRawGifsList.concat(parsed);
                                                 appendToColumns(parsed);
                                             } else {
-                                                rawGifsList = parsed;
+                                                fullRoot.gifRawGifsList = parsed;
                                                 redistributeGifs();
                                             }
 
-                                            gifView.hasNextPage = responseData.has_next === true;
-                                            gifView.currentPage = (responseData.current_page || page) + 1;
+                                            fullRoot.gifHasNextPage = responseData.has_next === true;
+                                            fullRoot.gifCurrentPage = (responseData.current_page || page) + 1;
                                         } else {
                                             console.log("ERROR: Klipy API returned status: " + xhr.status);
                                             try {
@@ -2422,15 +2478,15 @@ PlasmoidItem {
                                                 if (errResponse.errors && errResponse.errors.message && errResponse.errors.message.length > 0) {
                                                     var msg = errResponse.errors.message[0];
                                                     if (msg.indexOf("API key is invalid") !== -1) {
-                                                        gifView.apiErrorMsg = i18n("Invalid Klipy API Key. Get a new key from partner.klipy.com and update it in Settings.");
+                                                        fullRoot.gifApiErrorMsg = i18n("Invalid Klipy API Key. Get a new key from partner.klipy.com and update it in Settings.");
                                                     } else {
-                                                        gifView.apiErrorMsg = msg;
+                                                        fullRoot.gifApiErrorMsg = msg;
                                                     }
                                                 } else {
-                                                    gifView.apiErrorMsg = i18n("Klipy API Error: %1", xhr.status);
+                                                    fullRoot.gifApiErrorMsg = i18n("Klipy API Error: %1", xhr.status);
                                                 }
                                             } catch (e) {
-                                                gifView.apiErrorMsg = i18n("Klipy API Error: %1", xhr.status);
+                                                fullRoot.gifApiErrorMsg = i18n("Klipy API Error: %1", xhr.status);
                                             }
                                         }
                                     }
@@ -2439,9 +2495,9 @@ PlasmoidItem {
                             }
 
                             function fetchMoreGifs() {
-                                if (gifView.isLoadingMore || gifView.isLoading || !gifView.hasNextPage)
+                                if (fullRoot.gifIsLoadingMore || fullRoot.gifIsLoading || !fullRoot.gifHasNextPage)
                                 return;
-                                gifView.fetchGifs(gifView.lastQuery, true);
+                                gifView.fetchGifs(fullRoot.gifLastQuery, true);
                             }
 
                             function copyGif(gifUrl, title, webpUrl, previewUrl, aspectRatio) {
@@ -2463,14 +2519,14 @@ PlasmoidItem {
                             PlasmaComponents.BusyIndicator {
                                 id: gifLoadingIndicator
                                 anchors.centerIn: parent
-                                running: gifView.isLoading || gifSearchTimer.running
+                                running: fullRoot.gifIsLoading || gifSearchTimer.running
                                 visible: running
                             }
 
                             PlasmaComponents.Label {
                                 anchors.centerIn: parent
-                                text: gifView.apiErrorMsg !== "" ? gifView.apiErrorMsg : (fullRoot.filter !== "" ? i18n("No GIFs found :(") : i18n("No internet or Klipy API error"))
-                                visible: !gifView.isLoading && !gifSearchTimer.running && gifCol0Model.count === 0 && gifCol1Model.count === 0 && gifCol2Model.count === 0 && gifCol3Model.count === 0
+                                text: fullRoot.gifApiErrorMsg !== "" ? fullRoot.gifApiErrorMsg : (fullRoot.filter !== "" ? i18n("No GIFs found :(") : i18n("No internet or Klipy API error"))
+                                visible: !fullRoot.gifIsLoading && !gifSearchTimer.running && gifCol0Model.count === 0 && gifCol1Model.count === 0 && gifCol2Model.count === 0 && gifCol3Model.count === 0
                                 font.pixelSize: fullRoot.fontSizeEmptyLabel
                                 opacity: 0.6
                                 horizontalAlignment: Text.AlignHCenter
@@ -2611,6 +2667,7 @@ PlasmoidItem {
                                             }
                                         }
                                     }
+
                                     if (typeof trendingSection !== "undefined" && trendingSection && trendingSection.visible) {
                                         items.push({
                                             name: "GIFs",
@@ -2657,7 +2714,7 @@ PlasmoidItem {
                                         headerHeight: active.headerHeight
                                     };
                                 }
-                                visible: !gifView.isLoading && !gifSearchTimer.running && (gifCol0Model.count > 0 || gifCol1Model.count > 0 || gifCol2Model.count > 0 || gifCol3Model.count > 0 || fullRoot.favoriteEmojis.filter(e => e.type === "gif").length > 0 || fullRoot.recentEmojis.filter(e => e.type === "gif").length > 0)
+                                visible: !fullRoot.gifIsLoading && !gifSearchTimer.running && (gifCol0Model.count > 0 || gifCol1Model.count > 0 || gifCol2Model.count > 0 || gifCol3Model.count > 0 || fullRoot.favoriteEmojis.filter(e => e.type === "gif").length > 0 || fullRoot.recentEmojis.filter(e => e.type === "gif").length > 0)
 
                                 Connections {
                                     target: gifFlickable.contentItem
@@ -2688,8 +2745,8 @@ PlasmoidItem {
                                                     ? fullRoot.favoriteEmojis.filter(e => e.type === "gif")
                                                     : fullRoot.recentEmojis.filter(e => e.type === "gif").slice(0, 36);
                                                 
-                                                if (fullRoot.filter && fullRoot.filter.trim() !== "") {
-                                                    return performFilter(list, fullRoot.filter);
+                                                if (fullRoot.debouncedFilter && fullRoot.debouncedFilter.trim() !== "") {
+                                                    return performFilter(list, fullRoot.debouncedFilter);
                                                 }
                                                 return list;
                                             }
@@ -2937,8 +2994,8 @@ PlasmoidItem {
 
                                         PlasmaComponents.BusyIndicator {
                                             anchors.horizontalCenter: parent.horizontalCenter
-                                            running: gifView.isLoadingMore
-                                            visible: gifView.isLoadingMore && trendingHeader.isExpanded
+                                            running: fullRoot.gifIsLoadingMore
+                                            visible: fullRoot.gifIsLoadingMore && trendingHeader.isExpanded
                                             width: 24
                                             height: 24
                                         }
@@ -3050,7 +3107,7 @@ PlasmoidItem {
                             clip: true
 
                             property var categoryStates: ({})
-                            property string currentFilter: fullRoot.searchFilter
+                            property string currentFilter: fullRoot.debouncedFilter
                             
                             function toggleCategory(catName) {
                                 let states = Object.assign({}, categoryStates);
@@ -3267,10 +3324,10 @@ PlasmoidItem {
 
                                                         onClicked: function(mouse) {
                                                             if (mouse.button === Qt.RightButton) {
+                                                                var globalPos = mapToItem(fullRoot, mouse.x, mouse.y);
                                                                 contextMenu.emoji = kaomojiText;
                                                                 contextMenu.emojiObj = { emoji: kaomojiText, type: "kaomoji" };
                                                                 contextMenu.type = "kaomoji";
-                                                                var globalPos = mapToItem(fullRoot, mouse.x, mouse.y);
                                                                 contextMenu.popup(globalPos.x, globalPos.y);
                                                                 return;
                                                             }
@@ -3600,8 +3657,35 @@ PlasmoidItem {
                                 Column {
                                     id: emojiKitchenSection
                                     width: parent.width
-                                    spacing: 8
+                                    spacing: 0
                                     property string catName: fullRoot.catEmojiKitchen
+
+                                    property bool wasRendered: false
+                                    property bool shouldRender: {
+                                        if (wasRendered) return true;
+                                        if (!allEmojisView.visible) return false;
+                                        if (fullRoot.selectedCategory === catName) return true;
+                                        
+                                        let contentItem = allEmojisView.contentItem;
+                                        if (!contentItem) return false;
+                                        
+                                        let viewTop = contentItem.contentY;
+                                        let viewBottom = viewTop + allEmojisView.height;
+                                        let margin = 600;
+                                        
+                                        let itemY = emojiKitchenSection.y;
+                                        let itemHeight = emojiKitchenSection.height;
+                                        
+                                        if (itemHeight === 0) {
+                                            return (itemY >= viewTop - margin) && (itemY <= viewBottom + margin);
+                                        }
+                                        return (itemY + itemHeight >= viewTop - margin) && (itemY <= viewBottom + margin);
+                                    }
+                                    onShouldRenderChanged: {
+                                        if (shouldRender) {
+                                            wasRendered = true;
+                                        }
+                                    }
 
                                     Item {
                                         id: kitchenCatHeader
@@ -3673,17 +3757,6 @@ PlasmoidItem {
                             width: parent.width
                             implicitHeight: kitchenGridView.y + kitchenGridView.height
                             height: implicitHeight
-                            property string emoji1: ""
-                            property string emoji2: ""
-                            property string resultUrl: ""
-                            property string resultUrlAlternative: ""
-                            property string _actualSource: ""
-                            property string currentValidUrl: ""
-                            property var candidatesList: []
-                            property int currentCandidateIndex: 0
-
-                            onResultUrlChanged: _actualSource = resultUrl
-
                             Plasma5Support.DataSource {
                                 id: shellSource
                                 engine: "executable"
@@ -3691,85 +3764,132 @@ PlasmoidItem {
                                 onNewData: (source, data) => {
                                     disconnectSource(source);
                                 }
-                            }
+                             }
+
+                             Connections {
+                                 target: fullRoot
+                                 function onKitchenEmoji1Changed() {
+                                     kitchenView.updateResult();
+                                 }
+                                 function onKitchenEmoji2Changed() {
+                                     kitchenView.updateResult();
+                                 }
+                             }
 
                             readonly property int slotSize: {
                                 let calculated = Math.floor((kitchenView.width - 144) / 3);
                                 return Math.min(160, Math.max(32, calculated));
                             }
 
-                            function updateResult() {
-                                if (kitchenHelperLoader.item && emoji1 !== "" && emoji2 !== "") {
-                                    let candidates = kitchenHelperLoader.item.resolveComboCandidates(emoji1, emoji2, fullRoot.getCodepoint);
-                                    if (candidates && candidates.length > 0) {
-                                        candidatesList = candidates;
-                                        currentCandidateIndex = 0;
-                                        resultUrl = candidates[0];
-                                        _actualSource = candidates[0];
-                                        console.log("DEBUG: Candidates list generated:", JSON.stringify(candidates));
-                                    } else {
-                                        candidatesList = [];
-                                        currentCandidateIndex = 0;
-                                        resultUrl = "";
-                                        _actualSource = "";
-                                        currentValidUrl = "";
-                                    }
-                                } else {
-                                    candidatesList = [];
-                                    currentCandidateIndex = 0;
-                                    resultUrl = "";
-                                    _actualSource = "";
-                                    currentValidUrl = "";
-                                }
-                            }
-                            onEmoji1Changed: updateResult()
-                            onEmoji2Changed: updateResult()
+                             function updateResult() {
+                                 if (kitchenHelperLoader.item && fullRoot.kitchenEmoji1 !== "" && fullRoot.kitchenEmoji2 !== "") {
+                                     let candidates = kitchenHelperLoader.item.resolveComboCandidates(fullRoot.kitchenEmoji1, fullRoot.kitchenEmoji2, fullRoot.getCodepoint);
+                                     if (candidates && candidates.length > 0) {
+                                         fullRoot.kitchenCandidatesList = candidates;
+                                         fullRoot.kitchenCurrentCandidateIndex = 0;
+                                         fullRoot.kitchenResultUrl = candidates[0];
+                                         fullRoot.kitchenActualSource = candidates[0];
+                                         console.log("DEBUG: Candidates list generated:", JSON.stringify(candidates));
+                                     } else {
+                                         fullRoot.kitchenCandidatesList = [];
+                                         fullRoot.kitchenCurrentCandidateIndex = 0;
+                                         fullRoot.kitchenResultUrl = "";
+                                         fullRoot.kitchenActualSource = "";
+                                         fullRoot.kitchenCurrentValidUrl = "";
+                                     }
+                                 } else {
+                                     fullRoot.kitchenCandidatesList = [];
+                                     fullRoot.kitchenCurrentCandidateIndex = 0;
+                                     fullRoot.kitchenResultUrl = "";
+                                     fullRoot.kitchenActualSource = "";
+                                     fullRoot.kitchenCurrentValidUrl = "";
+                                 }
+                             }
 
-                            function randomize() {
-                                if (kitchenHelperLoader.item) {
-                                    let combo = kitchenHelperLoader.item.randomize();
-                                    if (combo) {
-                                        emoji1 = combo.emoji1;
-                                        emoji2 = combo.emoji2;
-                                    }
-                                }
-                            }
+                             function randomize() {
+                                 if (kitchenHelperLoader.item) {
+                                     let combo = kitchenHelperLoader.item.randomize();
+                                     if (combo) {
+                                         fullRoot.kitchenEmoji1 = combo.emoji1;
+                                         fullRoot.kitchenEmoji2 = combo.emoji2;
+                                     }
+                                 }
+                             }
 
-                            function randomizeSlot1() {
-                                if (kitchenHelperLoader.item) {
-                                    emoji1 = kitchenHelperLoader.item.randomizeSlot1(emoji2, fullRoot.getCodepoint);
-                                }
-                            }
+                             function randomizeSlot1() {
+                                 if (kitchenHelperLoader.item) {
+                                     fullRoot.kitchenEmoji1 = kitchenHelperLoader.item.randomizeSlot1(fullRoot.kitchenEmoji2, fullRoot.getCodepoint);
+                                 }
+                             }
 
-                            function randomizeSlot2() {
-                                if (kitchenHelperLoader.item) {
-                                    emoji2 = kitchenHelperLoader.item.randomizeSlot2(emoji1, fullRoot.getCodepoint);
-                                }
-                            }
+                             function randomizeSlot2() {
+                                 if (kitchenHelperLoader.item) {
+                                     fullRoot.kitchenEmoji2 = kitchenHelperLoader.item.randomizeSlot2(fullRoot.kitchenEmoji1, fullRoot.getCodepoint);
+                                 }
+                             }
 
-                            function copyResult() {
-                                if (currentValidUrl !== "") {
-                                    let cmd = 'curl -sL "' + currentValidUrl + '" > /tmp/kmoji_copy.png && (wl-copy --type image/png < /tmp/kmoji_copy.png || xclip -selection clipboard -t image/png -i /tmp/kmoji_copy.png)';
-                                    shellSource.connectSource(cmd);
-                                    showPasteTemporaryMessage(i18n("Copied mashup to clipboard!"));
+                             function copyResult() {
+                                 if (fullRoot.kitchenCurrentValidUrl !== "") {
+                                     let cmd = 'curl -sL "' + fullRoot.kitchenCurrentValidUrl + '" > /tmp/kmoji_copy.png && (wl-copy --type image/png < /tmp/kmoji_copy.png || xclip -selection clipboard -t image/png -i /tmp/kmoji_copy.png)';
+                                     shellSource.connectSource(cmd);
+                                     showPasteTemporaryMessage(i18n("Copied mashup to clipboard!"));
 
-                                    fullRoot.addRecentItem("kitchen", {
-                                        url: currentValidUrl,
-                                        emoji1: emoji1,
-                                        emoji2: emoji2
-                                    });
-                                }
-                            }
+                                     fullRoot.addRecentItem("kitchen", {
+                                         url: fullRoot.kitchenCurrentValidUrl,
+                                         emoji1: fullRoot.kitchenEmoji1,
+                                         emoji2: fullRoot.kitchenEmoji2
+                                     });
+                                 }
+                             }
 
-                            RowLayout {
-                                id: selectionRow
+                            Item {
+                                id: selectionRowPlaceholder
                                 anchors.top: parent.top
                                 anchors.left: parent.left
                                 anchors.right: parent.right
-                                anchors.leftMargin: 16
-                                anchors.rightMargin: 16
-                                spacing: 16
-                                clip: true
+                                height: selectionRowContainer.height
+                            }
+
+                            Rectangle {
+                                id: selectionRowContainer
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                height: selectionRow.implicitHeight + 12
+                                color: Kirigami.Theme.backgroundColor
+                                z: 5
+
+                                readonly property bool isSticky: y > 0
+
+                                y: {
+                                    if (!allEmojisView.contentItem) return 0;
+                                    let contentY = allEmojisView.contentItem.contentY;
+                                    let sectionTop = emojiKitchenSection.y + 32;
+                                    let headerHeight = 32;
+                                    let stickyY = contentY + headerHeight - sectionTop;
+                                    let maxY = kitchenView.height - height;
+                                    return Math.max(0, Math.min(stickyY, maxY));
+                                }
+
+                                Rectangle {
+                                    id: containerSeparator
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    height: 1
+                                    color: Kirigami.Theme.textColor
+                                    opacity: 0.15
+                                }
+
+                                RowLayout {
+                                    id: selectionRow
+                                    anchors.top: parent.top
+                                    anchors.topMargin: 4
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.leftMargin: 16
+                                    anchors.rightMargin: 16
+                                    spacing: 16
+                                    clip: true
 
                                 Item {
                                     Layout.fillWidth: true
@@ -3780,45 +3900,45 @@ PlasmoidItem {
                                     Layout.alignment: Qt.AlignVCenter
 
                                     Rectangle {
-                                        id: slot1
-                                        width: kitchenView.slotSize
-                                        height: kitchenView.slotSize
-                                        Layout.preferredWidth: kitchenView.slotSize
-                                        Layout.preferredHeight: kitchenView.slotSize
-                                        color: Kirigami.Theme.backgroundColor
-                                        border.color: (activeFocus || slot1MouseArea.containsMouse || kitchenView.emoji1 !== "") ? Kirigami.Theme.highlightColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
-                                        border.width: (activeFocus || slot1MouseArea.containsMouse || kitchenView.emoji1 === "") ? 2 : 1
-                                        radius: 8
+                                         id: slot1
+                                         width: kitchenView.slotSize
+                                         height: kitchenView.slotSize
+                                         Layout.preferredWidth: kitchenView.slotSize
+                                         Layout.preferredHeight: kitchenView.slotSize
+                                         color: Kirigami.Theme.backgroundColor
+                                         border.color: (activeFocus || slot1MouseArea.containsMouse || fullRoot.kitchenEmoji1 !== "") ? Kirigami.Theme.highlightColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
+                                         border.width: (activeFocus || slot1MouseArea.containsMouse || fullRoot.kitchenEmoji1 === "") ? 2 : 1
+                                         radius: 8
 
-                                        focusPolicy: Qt.StrongFocus
-                                        activeFocusOnTab: true
-                                        KeyNavigation.tab: randomizeSlot1Button
-                                        KeyNavigation.backtab: (categoryListView.currentItem || sidebarToggleButton)
+                                         focusPolicy: Qt.StrongFocus
+                                         activeFocusOnTab: true
+                                         KeyNavigation.tab: randomizeSlot1Button
+                                         KeyNavigation.backtab: (categoryListView.currentItem || sidebarToggleButton)
 
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: kitchenView.emoji1 === "" ? "?" : kitchenView.emoji1
-                                            font.pixelSize: kitchenView.emoji1 === "" ? Math.floor(kitchenView.slotSize * 0.6) : Math.floor(kitchenView.slotSize * 0.85)
-                                            font.family: kitchenView.emoji1 === "" ? Kirigami.Theme.defaultFont.family : "Noto Color Emoji"
-                                            color: Kirigami.Theme.textColor
-                                            opacity: kitchenView.emoji1 === "" ? 0.2 : 1.0
-                                            renderType: kitchenView.emoji1 === "" ? Text.QtRendering : Text.NativeRendering
-                                        }
+                                         Text {
+                                             anchors.centerIn: parent
+                                             text: fullRoot.kitchenEmoji1 === "" ? "?" : fullRoot.kitchenEmoji1
+                                             font.pixelSize: fullRoot.kitchenEmoji1 === "" ? Math.floor(kitchenView.slotSize * 0.6) : Math.floor(kitchenView.slotSize * 0.85)
+                                             font.family: fullRoot.kitchenEmoji1 === "" ? Kirigami.Theme.defaultFont.family : "Noto Color Emoji"
+                                             color: Kirigami.Theme.textColor
+                                             opacity: fullRoot.kitchenEmoji1 === "" ? 0.2 : 1.0
+                                             renderType: fullRoot.kitchenEmoji1 === "" ? Text.QtRendering : Text.NativeRendering
+                                         }
 
-                                        MouseArea {
-                                            id: slot1MouseArea
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                slot1.forceActiveFocus();
-                                                kitchenView.emoji1 = "";
-                                            }
-                                        }
+                                         MouseArea {
+                                             id: slot1MouseArea
+                                             anchors.fill: parent
+                                             hoverEnabled: true
+                                             cursorShape: Qt.PointingHandCursor
+                                             onClicked: {
+                                                 slot1.forceActiveFocus();
+                                                 fullRoot.kitchenEmoji1 = "";
+                                             }
+                                         }
 
-                                        Keys.onReturnPressed: kitchenView.emoji1 = ""
-                                        Keys.onEnterPressed: kitchenView.emoji1 = ""
-                                    }
+                                         Keys.onReturnPressed: fullRoot.kitchenEmoji1 = ""
+                                         Keys.onEnterPressed: fullRoot.kitchenEmoji1 = ""
+                                     }
 
                                     PlasmaComponents.ToolButton {
                                         id: randomizeSlot1Button
@@ -3856,45 +3976,45 @@ PlasmoidItem {
                                     Layout.alignment: Qt.AlignVCenter
 
                                     Rectangle {
-                                        id: slot2
-                                        width: kitchenView.slotSize
-                                        height: kitchenView.slotSize
-                                        Layout.preferredWidth: kitchenView.slotSize
-                                        Layout.preferredHeight: kitchenView.slotSize
-                                        color: Kirigami.Theme.backgroundColor
-                                        border.color: (activeFocus || slot2MouseArea.containsMouse || kitchenView.emoji2 !== "") ? Kirigami.Theme.highlightColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
-                                        border.width: (activeFocus || slot2MouseArea.containsMouse || kitchenView.emoji2 === "") ? 2 : 1
-                                        radius: 8
+                                         id: slot2
+                                         width: kitchenView.slotSize
+                                         height: kitchenView.slotSize
+                                         Layout.preferredWidth: kitchenView.slotSize
+                                         Layout.preferredHeight: kitchenView.slotSize
+                                         color: Kirigami.Theme.backgroundColor
+                                         border.color: (activeFocus || slot2MouseArea.containsMouse || fullRoot.kitchenEmoji2 !== "") ? Kirigami.Theme.highlightColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
+                                         border.width: (activeFocus || slot2MouseArea.containsMouse || fullRoot.kitchenEmoji2 === "") ? 2 : 1
+                                         radius: 8
 
-                                        focusPolicy: Qt.StrongFocus
-                                        activeFocusOnTab: true
-                                        KeyNavigation.tab: randomizeSlot2Button
-                                        KeyNavigation.backtab: randomizeSlot1Button
+                                         focusPolicy: Qt.StrongFocus
+                                         activeFocusOnTab: true
+                                         KeyNavigation.tab: randomizeSlot2Button
+                                         KeyNavigation.backtab: randomizeSlot1Button
 
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: kitchenView.emoji2 === "" ? "?" : kitchenView.emoji2
-                                            font.pixelSize: kitchenView.emoji2 === "" ? Math.floor(kitchenView.slotSize * 0.6) : Math.floor(kitchenView.slotSize * 0.85)
-                                            font.family: kitchenView.emoji2 === "" ? Kirigami.Theme.defaultFont.family : "Noto Color Emoji"
-                                            color: Kirigami.Theme.textColor
-                                            opacity: kitchenView.emoji2 === "" ? 0.2 : 1.0
-                                            renderType: kitchenView.emoji2 === "" ? Text.QtRendering : Text.NativeRendering
-                                        }
+                                         Text {
+                                             anchors.centerIn: parent
+                                             text: fullRoot.kitchenEmoji2 === "" ? "?" : fullRoot.kitchenEmoji2
+                                             font.pixelSize: fullRoot.kitchenEmoji2 === "" ? Math.floor(kitchenView.slotSize * 0.6) : Math.floor(kitchenView.slotSize * 0.85)
+                                             font.family: fullRoot.kitchenEmoji2 === "" ? Kirigami.Theme.defaultFont.family : "Noto Color Emoji"
+                                             color: Kirigami.Theme.textColor
+                                             opacity: fullRoot.kitchenEmoji2 === "" ? 0.2 : 1.0
+                                             renderType: fullRoot.kitchenEmoji2 === "" ? Text.QtRendering : Text.NativeRendering
+                                         }
 
-                                        MouseArea {
-                                            id: slot2MouseArea
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                slot2.forceActiveFocus();
-                                                kitchenView.emoji2 = "";
-                                            }
-                                        }
+                                         MouseArea {
+                                             id: slot2MouseArea
+                                             anchors.fill: parent
+                                             hoverEnabled: true
+                                             cursorShape: Qt.PointingHandCursor
+                                             onClicked: {
+                                                 slot2.forceActiveFocus();
+                                                 fullRoot.kitchenEmoji2 = "";
+                                             }
+                                         }
 
-                                        Keys.onReturnPressed: kitchenView.emoji2 = ""
-                                        Keys.onEnterPressed: kitchenView.emoji2 = ""
-                                    }
+                                         Keys.onReturnPressed: fullRoot.kitchenEmoji2 = ""
+                                         Keys.onEnterPressed: fullRoot.kitchenEmoji2 = ""
+                                     }
 
                                     PlasmaComponents.ToolButton {
                                         id: randomizeSlot2Button
@@ -3959,10 +4079,10 @@ PlasmoidItem {
                                             id: resultImage
                                             anchors.fill: parent
                                             anchors.margins: 8
-                                            source: kitchenView._actualSource
+                                            source: fullRoot.kitchenActualSource
                                             sourceSize: Qt.size(512, 512)
                                             fillMode: Image.PreserveAspectFit
-                                            opacity: (status === Image.Ready && kitchenView.resultUrl !== "") ? 1.0 : 0.0
+                                            opacity: (status === Image.Ready && fullRoot.kitchenResultUrl !== "") ? 1.0 : 0.0
                                             smooth: true
                                             mipmap: true
                                             asynchronous: true
@@ -3975,13 +4095,13 @@ PlasmoidItem {
 
                                             onStatusChanged: {
                                                 if (status === Image.Ready) {
-                                                    kitchenView.currentValidUrl = source.toString();
+                                                    fullRoot.kitchenCurrentValidUrl = source.toString();
                                                 } else if (status === Image.Error) {
-                                                    if (kitchenView.currentCandidateIndex + 1 < kitchenView.candidatesList.length) {
-                                                        kitchenView.currentCandidateIndex += 1;
-                                                        kitchenView._actualSource = kitchenView.candidatesList[kitchenView.currentCandidateIndex];
+                                                    if (fullRoot.kitchenCurrentCandidateIndex + 1 < fullRoot.kitchenCandidatesList.length) {
+                                                        fullRoot.kitchenCurrentCandidateIndex += 1;
+                                                        fullRoot.kitchenActualSource = fullRoot.kitchenCandidatesList[fullRoot.kitchenCurrentCandidateIndex];
                                                     } else {
-                                                        kitchenView.currentValidUrl = "";
+                                                        fullRoot.kitchenCurrentValidUrl = "";
                                                     }
                                                 }
                                             }
@@ -3989,13 +4109,13 @@ PlasmoidItem {
 
                                         HoverHandler {
                                             id: resultSlotHover
-                                            cursorShape: kitchenView.currentValidUrl !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            cursorShape: fullRoot.kitchenCurrentValidUrl !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor
                                         }
 
                                         MouseArea {
                                             id: resultSlotArea
                                             anchors.fill: parent
-                                            enabled: kitchenView.currentValidUrl !== ""
+                                            enabled: fullRoot.kitchenCurrentValidUrl !== ""
                                             acceptedButtons: Qt.LeftButton
                                             cursorShape: Qt.PointingHandCursor
                                             onClicked: {
@@ -4009,9 +4129,9 @@ PlasmoidItem {
                                             anchors.right: parent.right
                                             anchors.margins: 4
                                             icon.name: fullRoot.isFavoriteItem("kitchen", {
-                                                url: kitchenView.currentValidUrl
+                                                url: fullRoot.kitchenCurrentValidUrl
                                             }) ? "bookmarks-bookmarked" : "bookmarks"
-                                            visible: resultSlotHover.hovered && kitchenView.currentValidUrl !== ""
+                                            visible: resultSlotHover.hovered && fullRoot.kitchenCurrentValidUrl !== ""
                                             width: 24
                                             height: 24
                                             display: PlasmaComponents.ToolButton.IconOnly
@@ -4025,16 +4145,16 @@ PlasmoidItem {
 
                                             onClicked: {
                                                 fullRoot.toggleFavoriteItem("kitchen", {
-                                                    url: kitchenView.currentValidUrl,
-                                                    emoji1: kitchenView.emoji1,
-                                                    emoji2: kitchenView.emoji2
+                                                    url: fullRoot.kitchenCurrentValidUrl,
+                                                    emoji1: fullRoot.kitchenEmoji1,
+                                                    emoji2: fullRoot.kitchenEmoji2
                                                 });
                                             }
                                         }
 
-                                        Keys.onReturnPressed: if (kitchenView.currentValidUrl !== "")
+                                        Keys.onReturnPressed: if (fullRoot.kitchenCurrentValidUrl !== "")
                                         kitchenView.copyResult()
-                                        Keys.onEnterPressed: if (kitchenView.currentValidUrl !== "")
+                                        Keys.onEnterPressed: if (fullRoot.kitchenCurrentValidUrl !== "")
                                         kitchenView.copyResult()
                                     }
 
@@ -4056,19 +4176,13 @@ PlasmoidItem {
                                 Item {
                                     Layout.fillWidth: true
                                 }
-                            }
-
-                            Kirigami.Separator {
-                                id: gridSeparator
-                                anchors.top: selectionRow.bottom
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.topMargin: 8
+                             }
                             }
 
                             GridView {
                                 id: kitchenGridView
-                                anchors.top: gridSeparator.bottom
+                                anchors.top: selectionRowPlaceholder.bottom
+                                anchors.topMargin: 0
                                 anchors.left: parent.left
                                 anchors.right: parent.right
                                 height: Math.ceil(count / Math.max(1, Math.floor(width / cellWidth))) * cellHeight
@@ -4078,8 +4192,8 @@ PlasmoidItem {
                                 interactive: false
                                 cacheBuffer: 1000000
                                 property var kitchenFilteredEmojis: {
-                                    if (fullRoot.filter && fullRoot.filter.trim() !== "") {
-                                        return fullRoot.performFilter(fullRoot.kitchenEmojiList, fullRoot.filter);
+                                    if (fullRoot.debouncedFilter && fullRoot.debouncedFilter.trim() !== "") {
+                                        return fullRoot.performFilter(fullRoot.kitchenEmojiList, fullRoot.debouncedFilter);
                                     } else {
                                         return fullRoot.kitchenEmojiList;
                                     }
@@ -4118,14 +4232,14 @@ PlasmoidItem {
                                     return;
                                     if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                                         if (currentIndex >= 0 && currentIndex < kitchenFilteredEmojis.length) {
-                                            kitchenView.emoji1 = kitchenFilteredEmojis[currentIndex].emoji;
+                                            fullRoot.kitchenEmoji1 = kitchenFilteredEmojis[currentIndex].emoji;
                                         }
                                         keyboardActionPressed = true;
                                         keyboardReleaseTimer.restart();
                                         event.accepted = true;
                                     } else if (event.key === Qt.Key_Space) {
                                         if (currentIndex >= 0 && currentIndex < kitchenFilteredEmojis.length) {
-                                            kitchenView.emoji2 = kitchenFilteredEmojis[currentIndex].emoji;
+                                            fullRoot.kitchenEmoji2 = kitchenFilteredEmojis[currentIndex].emoji;
                                         }
                                         keyboardActionPressed = true;
                                         keyboardReleaseTimer.restart();
@@ -4240,9 +4354,9 @@ PlasmoidItem {
                                         }
                                         onClicked: function (mouse) {
                                             if (mouse.button === Qt.LeftButton) {
-                                                kitchenView.emoji1 = modelData.emoji;
+                                                fullRoot.kitchenEmoji1 = modelData.emoji;
                                             } else if (mouse.button === Qt.RightButton) {
-                                                kitchenView.emoji2 = modelData.emoji;
+                                                fullRoot.kitchenEmoji2 = modelData.emoji;
                                             }
                                         }
                                     }
@@ -4304,8 +4418,8 @@ PlasmoidItem {
                                 sourceList = fullRoot.filteredEmojiByGroup[modelData] || [];
                             }
                             
-                            if ((catName === "Favorites" || catName === "Recent") && fullRoot.filter && fullRoot.filter.trim() !== "") {
-                                return performFilter(sourceList, fullRoot.filter);
+                            if ((catName === "Favorites" || catName === "Recent") && fullRoot.debouncedFilter && fullRoot.debouncedFilter.trim() !== "") {
+                                return performFilter(sourceList, fullRoot.debouncedFilter);
                             }
                             return sourceList;
                         }
@@ -4319,8 +4433,8 @@ PlasmoidItem {
                                 sourceList = (fullRoot.recentEmojis || []).filter(e => e.type === "kitchen").slice(0, 36);
                             }
                             
-                            if (fullRoot.filter && fullRoot.filter.trim() !== "") {
-                                let lowerFilter = fullRoot.filter.toLowerCase().trim();
+                            if (fullRoot.debouncedFilter && fullRoot.debouncedFilter.trim() !== "") {
+                                let lowerFilter = fullRoot.debouncedFilter.toLowerCase().trim();
                                 return sourceList.filter(e => {
                                     let matchStr = "kitchen mashup " + (e.emoji1 || "") + " " + (e.emoji2 || "");
                                     return matchStr.indexOf(lowerFilter) !== -1;
@@ -4501,15 +4615,15 @@ PlasmoidItem {
 
                         Flow {
                             width: parent.width
-                            spacing: 8
+                            spacing: 0
                             visible: catHeader.isExpanded && catKitchens.length > 0
 
                             Repeater {
                                 model: (catHeader.isExpanded && categoryColumn.shouldRender) ? catKitchens : []
 
                                 delegate: Loader {
-                                    width: Math.max(48, Math.floor(fullRoot.internalGridSize * 1.2))
-                                    height: Math.max(48, Math.floor(fullRoot.internalGridSize * 1.2))
+                                    width: fullRoot.internalGridSize
+                                    height: fullRoot.internalGridSize
                                     asynchronous: true
                                     property var kitchenData: modelData
                                     
@@ -4519,10 +4633,11 @@ PlasmoidItem {
 
                                             Rectangle {
                                                 anchors.fill: parent
-                                                color: Kirigami.Theme.alternateBackgroundColor
-                                                border.color: (kitchenHoverHandler.hovered || kitchenMouseArea.pressed) ? Kirigami.Theme.highlightColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
-                                                border.width: (kitchenHoverHandler.hovered || kitchenMouseArea.pressed) ? 2 : 1
-                                                radius: 8
+                                                anchors.margins: 2
+                                                color: kitchenMouseArea.pressed ? Kirigami.Theme.highlightColor : (kitchenHoverHandler.hovered ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.2) : "transparent")
+                                                border.color: Kirigami.Theme.highlightColor
+                                                border.width: (kitchenHoverHandler.hovered || kitchenMouseArea.pressed) ? 2 : 0
+                                                radius: 4
 
                                                 Image {
                                                     anchors.fill: parent
@@ -4570,32 +4685,13 @@ PlasmoidItem {
                                                                 if (fullRoot.plasmoidItem)
                                                                     fullRoot.plasmoidItem.expanded = false;
                                                             }
+                                                        } else if (mouse.button === Qt.RightButton) {
+                                                            var globalPos = kitchenMouseArea.mapToItem(fullRoot, mouse.x, mouse.y);
+                                                            contextMenu.emoji = "";
+                                                            contextMenu.emojiObj = kitchenData;
+                                                            contextMenu.type = "kitchen";
+                                                            contextMenu.popup(globalPos.x, globalPos.y);
                                                         }
-                                                    }
-                                                }
-
-                                                PlasmaComponents.ToolButton {
-                                                    anchors.top: parent.top
-                                                    anchors.right: parent.right
-                                                    anchors.margins: 2
-                                                    icon.name: fullRoot.isFavoriteItem("kitchen", {
-                                                        url: kitchenData.url
-                                                    }) ? "bookmarks-bookmarked" : "bookmarks"
-                                                    visible: kitchenHoverHandler.hovered
-                                                    width: 18
-                                                    height: 18
-                                                    display: PlasmaComponents.ToolButton.IconOnly
-                                                    z: 10
-
-                                                    background: Rectangle {
-                                                        color: parent.pressed ? Kirigami.Theme.highlightColor : (parent.hovered ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.35) : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.85))
-                                                        radius: 3
-                                                        border.color: (parent.pressed || parent.hovered) ? Kirigami.Theme.highlightColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
-                                                        border.width: 1
-                                                    }
-
-                                                    onClicked: {
-                                                        fullRoot.toggleFavoriteItem("kitchen", kitchenData);
                                                     }
                                                 }
                                             }
@@ -4874,14 +4970,6 @@ PlasmoidItem {
             visible: false
             clip: true
 
-            readonly property int countEmojis: fullRoot.activeEmojis.length
-            readonly property int countGifs: fullRoot.activeGifs.length
-            readonly property int countKitchen: fullRoot.activeKitchens.length
-
-            property bool isEmojisExpanded: fullRoot.selectedCategory === fullRoot.catFavorites ? fullRoot.favoritesEmojisExpanded : fullRoot.recentEmojisExpanded
-            property bool isGifsExpanded: fullRoot.selectedCategory === fullRoot.catFavorites ? fullRoot.favoritesGifsExpanded : fullRoot.recentGifsExpanded
-            property bool isKitchenExpanded: fullRoot.selectedCategory === fullRoot.catFavorites ? fullRoot.favoritesKitchenExpanded : fullRoot.recentKitchenExpanded
-
             function toggleEmojisExpanded() {
                 if (fullRoot.selectedCategory === fullRoot.catFavorites) {
                     fullRoot.favoritesEmojisExpanded = !fullRoot.favoritesEmojisExpanded;
@@ -4916,16 +5004,16 @@ PlasmoidItem {
                 Column {
                     width: parent.width
                     spacing: 0
-                    visible: favRecentsView.countEmojis > 0
+                    visible: fullRoot.favRecentsCountEmojis > 0
 
                     Item {
                         id: emojisHeader
                         width: parent.width
                         height: 32
 
-                        property bool isExpanded: favRecentsView.isEmojisExpanded
+                        property bool isExpanded: fullRoot.favRecentsIsEmojisExpanded
                         property string title: i18n("Emojis")
-                        property int count: favRecentsView.countEmojis
+                        property int count: fullRoot.favRecentsCountEmojis
 
                         Rectangle {
                             anchors.fill: parent
@@ -4970,516 +5058,398 @@ PlasmoidItem {
                                     text: emojisHeader.count
                                     font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                     font.bold: true
+                                    color: Kirigami.Theme.highlightColor
+                                }
+                            }
+
+                            Kirigami.Separator {
+                                Layout.fillWidth: true
+                                opacity: 0.3
+                            }
                         }
 
-                        ScrollView {
-                            id: favRecentsView
+                        MouseArea {
+                            id: emojisHeaderMouse
                             anchors.fill: parent
-                            visible: false
-                            clip: true
+                            hoverEnabled: true
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: function(mouse) {
+                                if (mouse.button === Qt.LeftButton) {
+                                    favRecentsView.toggleEmojisExpanded();
+                                }
+                            }
+                        }
+                    }
 
-                            readonly property int countEmojis: fullRoot.activeEmojis.length
-                            readonly property int countGifs: fullRoot.activeGifs.length
-                            readonly property int countKitchen: fullRoot.activeKitchens.length
+                    Flow {
+                        width: parent.width
+                        spacing: 4
+                        visible: fullRoot.favRecentsIsEmojisExpanded
 
-                            property bool isEmojisExpanded: fullRoot.selectedCategory === fullRoot.catFavorites ? fullRoot.favoritesEmojisExpanded : fullRoot.recentEmojisExpanded
-                            property bool isGifsExpanded: fullRoot.selectedCategory === fullRoot.catFavorites ? fullRoot.favoritesGifsExpanded : fullRoot.recentGifsExpanded
-                            property bool isKitchenExpanded: fullRoot.selectedCategory === fullRoot.catFavorites ? fullRoot.favoritesKitchenExpanded : fullRoot.recentKitchenExpanded
+                        Repeater {
+                            model: fullRoot.activeEmojis
 
-                            function toggleEmojisExpanded() {
-                                if (fullRoot.selectedCategory === fullRoot.catFavorites) {
-                                    fullRoot.favoritesEmojisExpanded = !fullRoot.favoritesEmojisExpanded;
-                                } else {
-                                    fullRoot.recentEmojisExpanded = !fullRoot.recentEmojisExpanded;
+                            delegate: Item {
+                                width: fullRoot.internalGridSize
+                                height: fullRoot.internalGridSize
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    anchors.margins: 2
+                                    color: Kirigami.Theme.highlightColor
+                                    radius: 4
+                                    opacity: emojiMouseArea.pressed ? 1.0 : (emojiMouseArea.containsMouse ? 0.2 : 0)
+                                }
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    color: "transparent"
+                                    radius: 4
+                                    border.width: (emojiMouseArea.pressed || emojiMouseArea.containsMouse) ? 2 : 0
+                                    border.color: Kirigami.Theme.highlightColor
+                                }
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: modelData.emoji
+                                    font.pixelSize: Math.floor(fullRoot.internalGridSize * 0.81)
+                                    font.family: "Noto Color Emoji"
+                                    renderType: Text.NativeRendering
+                                }
+
+                                MouseArea {
+                                    id: emojiMouseArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+
+                                    onEntered: {
+                                        fullRoot.emojiHoveredEmojiKey = modelData.emoji;
+                                        fullRoot.hoveredEmojiName = modelData.name;
+                                    }
+
+                                    onExited: {
+                                        if (fullRoot.emojiHoveredEmojiKey === modelData.emoji) {
+                                            fullRoot.emojiHoveredEmojiKey = "";
+                                            fullRoot.hoveredEmojiName = "";
+                                        }
+                                    }
+
+                                    onClicked: function (mouse) {
+                                        if (mouse.button === Qt.LeftButton) {
+                                            fullRoot.handleEmojiSelected(modelData.emoji, mouse.modifiers & Qt.ControlModifier, mouse.modifiers & Qt.ShiftModifier, mouse.modifiers & Qt.AltModifier);
+                                        } else if (mouse.button === Qt.RightButton) {
+                                            var globalPos = mapToItem(fullRoot, mouse.x, mouse.y);
+                                            contextMenu.emoji = modelData.emoji;
+                                            contextMenu.emojiObj = modelData;
+                                            contextMenu.type = "emoji";
+                                            contextMenu.popup(globalPos.x, globalPos.y);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Column {
+                    width: parent.width
+                    spacing: 0
+                    visible: fullRoot.favRecentsCountGifs > 0
+
+                    Item {
+                        id: gifsHeader
+                        width: parent.width
+                        height: 32
+
+                        property bool isExpanded: fullRoot.favRecentsIsGifsExpanded
+                        property string title: i18n("GIFs")
+                        property int count: fullRoot.favRecentsCountGifs
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: gifsHeaderMouse.pressed ? Kirigami.Theme.highlightColor : (gifsHeaderMouse.containsMouse ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.1) : "transparent")
+                            border.color: (gifsHeaderMouse.pressed || gifsHeaderMouse.containsMouse) ? Kirigami.Theme.highlightColor : "transparent"
+                            border.width: 1
+                            radius: 4
+                        }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 4
+                            anchors.rightMargin: 4
+                            spacing: 8
+
+                            Item {
+                                implicitWidth: 16
+                                implicitHeight: 16
+                                Kirigami.Icon {
+                                    anchors.centerIn: parent
+                                    source: gifsHeader.isExpanded ? "go-down" : "go-next"
+                                    width: 16
+                                    height: 16
                                 }
                             }
 
-                            function toggleGifsExpanded() {
-                                if (fullRoot.selectedCategory === fullRoot.catFavorites) {
-                                    fullRoot.favoritesGifsExpanded = !fullRoot.favoritesGifsExpanded;
-                                } else {
-                                    fullRoot.recentGifsExpanded = !fullRoot.recentGifsExpanded;
+                            PlasmaComponents.Label {
+                                text: gifsHeader.title
+                                font.bold: true
+                                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 1.05
+                            }
+
+                            Rectangle {
+                                width: gifsCountLabel.contentWidth + 12
+                                height: 18
+                                radius: 9
+                                color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.2)
+
+                                PlasmaComponents.Label {
+                                    id: gifsCountLabel
+                                    anchors.centerIn: parent
+                                    text: gifsHeader.count
+                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                    font.bold: true
+                                    color: Kirigami.Theme.highlightColor
                                 }
                             }
 
-                            function toggleKitchenExpanded() {
-                                if (fullRoot.selectedCategory === fullRoot.catFavorites) {
-                                    fullRoot.favoritesKitchenExpanded = !fullRoot.favoritesKitchenExpanded;
-                                } else {
-                                    fullRoot.recentKitchenExpanded = !fullRoot.recentKitchenExpanded;
+                            Kirigami.Separator {
+                                Layout.fillWidth: true
+                                opacity: 0.3
+                            }
+                        }
+
+                        MouseArea {
+                            id: gifsHeaderMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: function(mouse) {
+                                if (mouse.button === Qt.LeftButton) {
+                                    favRecentsView.toggleGifsExpanded();
+                                }
+                            }
+                        }
+                    }
+
+                    Row {
+                        id: favRecentsMasonryRow
+                        width: parent.width
+                        spacing: 6
+                        visible: fullRoot.favRecentsIsGifsExpanded
+
+                        readonly property int numColumns: fullRoot.favRecentsNumColumns
+                        readonly property int columnWidth: Math.floor((width - (numColumns - 1) * spacing) / numColumns)
+
+                        Column {
+                            spacing: 6
+                            width: favRecentsMasonryRow.columnWidth
+
+                            Repeater {
+                                model: favGifCol0Model
+                                delegate: favRecGifDelegate
+                            }
+                        }
+
+                        Column {
+                            spacing: 6
+                            width: favRecentsMasonryRow.columnWidth
+
+                            Repeater {
+                                model: favGifCol1Model
+                                delegate: favRecGifDelegate
+                            }
+                        }
+
+                        Column {
+                            spacing: 6
+                            width: favRecentsMasonryRow.columnWidth
+                            visible: favRecentsMasonryRow.numColumns >= 3
+
+                            Repeater {
+                                model: favGifCol2Model
+                                delegate: favRecGifDelegate
+                            }
+                        }
+
+                        Column {
+                            spacing: 6
+                            width: favRecentsMasonryRow.columnWidth
+                            visible: favRecentsMasonryRow.numColumns >= 4
+
+                            Repeater {
+                                model: favGifCol3Model
+                                delegate: favRecGifDelegate
+                            }
+                        }
+                    }
+                }
+
+                Column {
+                    width: parent.width
+                    spacing: 0
+                    visible: fullRoot.favRecentsCountKitchen > 0
+
+                    Item {
+                        id: kitchenHeader
+                        width: parent.width
+                        height: 32
+
+                        property bool isExpanded: fullRoot.favRecentsIsKitchenExpanded
+                        property string title: i18n("Emoji Kitchen")
+                        property int count: fullRoot.favRecentsCountKitchen
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: kitchenHeaderMouse.pressed ? Kirigami.Theme.highlightColor : (kitchenHeaderMouse.containsMouse ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.1) : "transparent")
+                            border.color: (kitchenHeaderMouse.pressed || kitchenHeaderMouse.containsMouse) ? Kirigami.Theme.highlightColor : "transparent"
+                            border.width: 1
+                            radius: 4
+                        }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 4
+                            anchors.rightMargin: 4
+                            spacing: 8
+
+                            Item {
+                                implicitWidth: 16
+                                implicitHeight: 16
+                                Kirigami.Icon {
+                                    anchors.centerIn: parent
+                                    source: kitchenHeader.isExpanded ? "go-down" : "go-next"
+                                    width: 16
+                                    height: 16
                                 }
                             }
 
-                            Column {
-                                id: favRecentsMainLayout
-                                x: 8
-                                y: 8
-                                width: favRecentsView.width - 16
-                                spacing: 16
+                            PlasmaComponents.Label {
+                                text: kitchenHeader.title
+                                font.bold: true
+                                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 1.05
+                            }
 
-                                Column {
-                                    width: parent.width
-                                    spacing: 0
-                                    visible: favRecentsView.countEmojis > 0
+                            Rectangle {
+                                width: kitchenCountLabel.contentWidth + 12
+                                height: 18
+                                radius: 9
+                                color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.2)
 
-                                    Item {
-                                        id: emojisHeader
-                                        width: parent.width
-                                        height: 32
-
-                                        property bool isExpanded: favRecentsView.isEmojisExpanded
-                                        property string title: i18n("Emojis")
-                                        property int count: favRecentsView.countEmojis
-
-                                        Rectangle {
-                                            anchors.fill: parent
-                                            color: emojisHeaderMouse.pressed ? Kirigami.Theme.highlightColor : (emojisHeaderMouse.containsMouse ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.1) : "transparent")
-                                            border.color: (emojisHeaderMouse.pressed || emojisHeaderMouse.containsMouse) ? Kirigami.Theme.highlightColor : "transparent"
-                                            border.width: 1
-                                            radius: 4
-                                        }
-
-                                        RowLayout {
-                                            anchors.fill: parent
-                                            anchors.leftMargin: 4
-                                            anchors.rightMargin: 4
-                                            spacing: 8
-
-                                            Item {
-                                                implicitWidth: 16
-                                                implicitHeight: 16
-                                                Kirigami.Icon {
-                                                    anchors.centerIn: parent
-                                                    source: emojisHeader.isExpanded ? "go-down" : "go-next"
-                                                    width: 16
-                                                    height: 16
-                                                }
-                                            }
-
-                                            PlasmaComponents.Label {
-                                                text: emojisHeader.title
-                                                font.bold: true
-                                                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 1.05
-                                            }
-
-                                            Rectangle {
-                                                width: emojisCountLabel.contentWidth + 12
-                                                height: 18
-                                                radius: 9
-                                                color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.2)
-
-                                                PlasmaComponents.Label {
-                                                    id: emojisCountLabel
-                                                    anchors.centerIn: parent
-                                                    text: emojisHeader.count
-                                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                                    font.bold: true
-                                                    color: Kirigami.Theme.highlightColor
-                                                }
-                                            }
-
-                                            Kirigami.Separator {
-                                                Layout.fillWidth: true
-                                                opacity: 0.3
-                                            }
-                                        }
-
-                                        MouseArea {
-                                            id: emojisHeaderMouse
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: function(mouse) {
-                                                if (mouse.button === Qt.LeftButton) {
-                                                    favRecentsView.toggleEmojisExpanded();
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    Flow {
-                                        width: parent.width
-                                        spacing: 4
-                                        visible: favRecentsView.isEmojisExpanded
-
-                                        Repeater {
-                                            model: fullRoot.activeEmojis
-
-                                            delegate: Item {
-                                                width: fullRoot.internalGridSize
-                                                height: fullRoot.internalGridSize
-
-                                                Rectangle {
-                                                    anchors.fill: parent
-                                                    anchors.margins: 2
-                                                    color: Kirigami.Theme.highlightColor
-                                                    radius: 4
-                                                    opacity: emojiMouseArea.pressed ? 1.0 : (emojiMouseArea.containsMouse ? 0.2 : 0)
-                                                }
-
-                                                Rectangle {
-                                                    anchors.fill: parent
-                                                    color: "transparent"
-                                                    radius: 4
-                                                    border.width: (emojiMouseArea.pressed || emojiMouseArea.containsMouse) ? 2 : 0
-                                                    border.color: Kirigami.Theme.highlightColor
-                                                }
-
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: modelData.emoji
-                                                    font.pixelSize: Math.floor(fullRoot.internalGridSize * 0.81)
-                                                    font.family: "Noto Color Emoji"
-                                                    renderType: Text.NativeRendering
-                                                }
-
-                                                MouseArea {
-                                                    id: emojiMouseArea
-                                                    anchors.fill: parent
-                                                    hoverEnabled: true
-                                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-
-                                                    onEntered: {
-                                                        fullRoot.emojiHoveredEmojiKey = modelData.emoji;
-                                                        fullRoot.hoveredEmojiName = modelData.name;
-                                                    }
-
-                                                    onExited: {
-                                                        if (fullRoot.emojiHoveredEmojiKey === modelData.emoji) {
-                                                            fullRoot.emojiHoveredEmojiKey = "";
-                                                            fullRoot.hoveredEmojiName = "";
-                                                        }
-                                                    }
-
-                                                    onClicked: function (mouse) {
-                                                        if (mouse.button === Qt.LeftButton) {
-                                                            fullRoot.handleEmojiSelected(modelData.emoji, mouse.modifiers & Qt.ControlModifier, mouse.modifiers & Qt.ShiftModifier, mouse.modifiers & Qt.AltModifier);
-                                                        } else if (mouse.button === Qt.RightButton) {
-                                                            var globalPos = mapToItem(fullRoot, mouse.x, mouse.y);
-                                                            contextMenu.emoji = modelData.emoji;
-                                                            contextMenu.emojiObj = modelData;
-                                                            contextMenu.popup(globalPos.x, globalPos.y);
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
+                                PlasmaComponents.Label {
+                                    id: kitchenCountLabel
+                                    anchors.centerIn: parent
+                                    text: kitchenHeader.count
+                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                    font.bold: true
+                                    color: Kirigami.Theme.highlightColor
                                 }
+                            }
 
-                                Column {
-                                    width: parent.width
-                                    spacing: 0
-                                    visible: favRecentsView.countGifs > 0
+                            Kirigami.Separator {
+                                Layout.fillWidth: true
+                                opacity: 0.3
+                            }
+                        }
 
-                                    Item {
-                                        id: gifsHeader
-                                        width: parent.width
-                                        height: 32
-
-                                        property bool isExpanded: favRecentsView.isGifsExpanded
-                                        property string title: i18n("GIFs")
-                                        property int count: favRecentsView.countGifs
-
-                                        Rectangle {
-                                            anchors.fill: parent
-                                            color: gifsHeaderMouse.pressed ? Kirigami.Theme.highlightColor : (gifsHeaderMouse.containsMouse ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.1) : "transparent")
-                                            border.color: (gifsHeaderMouse.pressed || gifsHeaderMouse.containsMouse) ? Kirigami.Theme.highlightColor : "transparent"
-                                            border.width: 1
-                                            radius: 4
-                                        }
-
-                                        RowLayout {
-                                            anchors.fill: parent
-                                            anchors.leftMargin: 4
-                                            anchors.rightMargin: 4
-                                            spacing: 8
-
-                                            Item {
-                                                implicitWidth: 16
-                                                implicitHeight: 16
-                                                Kirigami.Icon {
-                                                    anchors.centerIn: parent
-                                                    source: gifsHeader.isExpanded ? "go-down" : "go-next"
-                                                    width: 16
-                                                    height: 16
-                                                }
-                                            }
-
-                                            PlasmaComponents.Label {
-                                                text: gifsHeader.title
-                                                font.bold: true
-                                                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 1.05
-                                            }
-
-                                            Rectangle {
-                                                width: gifsCountLabel.contentWidth + 12
-                                                height: 18
-                                                radius: 9
-                                                color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.2)
-
-                                                PlasmaComponents.Label {
-                                                    id: gifsCountLabel
-                                                    anchors.centerIn: parent
-                                                    text: gifsHeader.count
-                                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                                    font.bold: true
-                                                    color: Kirigami.Theme.highlightColor
-                                                }
-                                            }
-
-                                            Kirigami.Separator {
-                                                Layout.fillWidth: true
-                                                opacity: 0.3
-                                            }
-                                        }
-
-                                        MouseArea {
-                                            id: gifsHeaderMouse
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: function(mouse) {
-                                                if (mouse.button === Qt.LeftButton) {
-                                                    favRecentsView.toggleGifsExpanded();
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    Row {
-                                        id: favRecentsMasonryRow
-                                        width: parent.width
-                                        spacing: 6
-                                        visible: favRecentsView.isGifsExpanded
-
-                                        readonly property int numColumns: fullRoot.favRecentsNumColumns
-                                        readonly property int columnWidth: Math.floor((width - (numColumns - 1) * spacing) / numColumns)
-
-                                        Column {
-                                            spacing: 6
-                                            width: favRecentsMasonryRow.columnWidth
-
-                                            Repeater {
-                                                model: favGifCol0Model
-                                                delegate: favRecGifDelegate
-                                            }
-                                        }
-
-                                        Column {
-                                            spacing: 6
-                                            width: favRecentsMasonryRow.columnWidth
-
-                                            Repeater {
-                                                model: favGifCol1Model
-                                                delegate: favRecGifDelegate
-                                            }
-                                        }
-
-                                        Column {
-                                            spacing: 6
-                                            width: favRecentsMasonryRow.columnWidth
-                                            visible: favRecentsMasonryRow.numColumns >= 3
-
-                                            Repeater {
-                                                model: favGifCol2Model
-                                                delegate: favRecGifDelegate
-                                            }
-                                        }
-
-                                        Column {
-                                            spacing: 6
-                                            width: favRecentsMasonryRow.columnWidth
-                                            visible: favRecentsMasonryRow.numColumns >= 4
-
-                                            Repeater {
-                                                model: favGifCol3Model
-                                                delegate: favRecGifDelegate
-                                            }
-                                        }
-                                    }
+                        MouseArea {
+                            id: kitchenHeaderMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: function(mouse) {
+                                if (mouse.button === Qt.LeftButton) {
+                                    favRecentsView.toggleKitchenExpanded();
                                 }
+                            }
+                        }
+                    }
 
-                                Column {
-                                    width: parent.width
-                                    spacing: 0
-                                    visible: favRecentsView.countKitchen > 0
+                    Flow {
+                        width: parent.width
+                        spacing: 0
+                        visible: fullRoot.favRecentsIsKitchenExpanded
 
-                                    Item {
-                                        id: kitchenHeader
-                                        width: parent.width
-                                        height: 32
+                        Repeater {
+                            model: fullRoot.activeKitchens
 
-                                        property bool isExpanded: favRecentsView.isKitchenExpanded
-                                        property string title: i18n("Emoji Kitchen")
-                                        property int count: favRecentsView.countKitchen
+                            delegate: Item {
+                                width: fullRoot.internalGridSize
+                                height: fullRoot.internalGridSize
 
-                                        Rectangle {
-                                            anchors.fill: parent
-                                            color: kitchenHeaderMouse.pressed ? Kirigami.Theme.highlightColor : (kitchenHeaderMouse.containsMouse ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.1) : "transparent")
-                                            border.color: (kitchenHeaderMouse.pressed || kitchenHeaderMouse.containsMouse) ? Kirigami.Theme.highlightColor : "transparent"
-                                            border.width: 1
-                                            radius: 4
-                                        }
+                                Rectangle {
+                                    anchors.fill: parent
+                                    anchors.margins: 2
+                                    color: kitchenMouseArea.pressed ? Kirigami.Theme.highlightColor : (kitchenHoverHandler.hovered ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.2) : "transparent")
+                                    border.color: Kirigami.Theme.highlightColor
+                                    border.width: (kitchenHoverHandler.hovered || kitchenMouseArea.pressed) ? 2 : 0
+                                    radius: 4
 
-                                        RowLayout {
-                                            anchors.fill: parent
-                                            anchors.leftMargin: 4
-                                            anchors.rightMargin: 4
-                                            spacing: 8
+                                    Image {
+                                        anchors.fill: parent
+                                        anchors.margins: 4
+                                        source: modelData.url
+                                        sourceSize: Qt.size(256, 256)
+                                        fillMode: Image.PreserveAspectFit
+                                        smooth: true
+                                        mipmap: true
+                                    }
 
-                                            Item {
-                                                implicitWidth: 16
-                                                implicitHeight: 16
-                                                Kirigami.Icon {
-                                                    anchors.centerIn: parent
-                                                    source: kitchenHeader.isExpanded ? "go-down" : "go-next"
-                                                    width: 16
-                                                    height: 16
-                                                }
-                                            }
-
-                                            PlasmaComponents.Label {
-                                                text: kitchenHeader.title
-                                                font.bold: true
-                                                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 1.05
-                                            }
-
-                                            Rectangle {
-                                                width: kitchenCountLabel.contentWidth + 12
-                                                height: 18
-                                                radius: 9
-                                                color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.2)
-
-                                                PlasmaComponents.Label {
-                                                    id: kitchenCountLabel
-                                                    anchors.centerIn: parent
-                                                    text: kitchenHeader.count
-                                                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                                    font.bold: true
-                                                    color: Kirigami.Theme.highlightColor
-                                                }
-                                            }
-
-                                            Kirigami.Separator {
-                                                Layout.fillWidth: true
-                                                opacity: 0.3
-                                            }
-                                        }
-
-                                        MouseArea {
-                                            id: kitchenHeaderMouse
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: function(mouse) {
-                                                if (mouse.button === Qt.LeftButton) {
-                                                    favRecentsView.toggleKitchenExpanded();
+                                    HoverHandler {
+                                        id: kitchenHoverHandler
+                                        onHoveredChanged: {
+                                            if (hovered) {
+                                                fullRoot.emojiHoveredEmojiKey = (modelData.emoji1 && modelData.emoji2) ? (modelData.emoji1 + " + " + modelData.emoji2) : "";
+                                                fullRoot.hoveredEmojiName = (modelData.emoji1 && modelData.emoji2) ? (modelData.emoji1 + " + " + modelData.emoji2) : i18n("Emoji Kitchen Mashup");
+                                                fullRoot.emojiHoveredEmojiType = "kitchen";
+                                                fullRoot.emojiHoveredKitchenUrl = modelData.url;
+                                            } else {
+                                                if (fullRoot.emojiHoveredKitchenUrl === modelData.url) {
+                                                    fullRoot.emojiHoveredEmojiKey = "";
+                                                    fullRoot.hoveredEmojiName = "";
+                                                    fullRoot.emojiHoveredKitchenUrl = "";
                                                 }
                                             }
                                         }
                                     }
 
-                                    Flow {
-                                        width: parent.width
-                                        spacing: 8
-                                        visible: favRecentsView.isKitchenExpanded
+                                    MouseArea {
+                                        id: kitchenMouseArea
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: function(mouse) {
+                                            if (mouse.button === Qt.LeftButton) {
+                                                let cmd = 'curl -sL "' + modelData.url + '" > /tmp/kmoji_copy.png && (wl-copy --type image/png < /tmp/kmoji_copy.png || xclip -selection clipboard -t image/png -i /tmp/kmoji_copy.png)';
+                                                shellSource.connectSource(cmd);
+                                                showPasteTemporaryMessage(i18n("Copied mashup to clipboard!"));
 
-                                        Repeater {
-                                            model: fullRoot.activeKitchens
+                                                fullRoot.addRecentItem("kitchen", modelData);
 
-                                            delegate: Item {
-                                                width: 64
-                                                height: 64
-
-                                                Rectangle {
-                                                    anchors.fill: parent
-                                                    color: Kirigami.Theme.alternateBackgroundColor
-                                                    border.color: (kitchenHoverHandler.hovered || kitchenMouseArea.pressed) ? Kirigami.Theme.highlightColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
-                                                    border.width: (kitchenHoverHandler.hovered || kitchenMouseArea.pressed) ? 2 : 1
-                                                    radius: 8
-
-                                                    Image {
-                                                        anchors.fill: parent
-                                                        anchors.margins: 4
-                                                        source: modelData.url
-                                                        sourceSize: Qt.size(256, 256)
-                                                        fillMode: Image.PreserveAspectFit
-                                                        smooth: true
-                                                        mipmap: true
-                                                    }
-
-                                                    HoverHandler {
-                                                        id: kitchenHoverHandler
-                                                        onHoveredChanged: {
-                                                            if (hovered) {
-                                                                fullRoot.emojiHoveredEmojiKey = (modelData.emoji1 && modelData.emoji2) ? (modelData.emoji1 + " + " + modelData.emoji2) : "";
-                                                                fullRoot.hoveredEmojiName = (modelData.emoji1 && modelData.emoji2) ? (modelData.emoji1 + " + " + modelData.emoji2) : i18n("Emoji Kitchen Mashup");
-                                                                fullRoot.emojiHoveredEmojiType = "kitchen";
-                                                                fullRoot.emojiHoveredKitchenUrl = modelData.url;
-                                                            } else {
-                                                                if (fullRoot.emojiHoveredKitchenUrl === modelData.url) {
-                                                                    fullRoot.emojiHoveredEmojiKey = "";
-                                                                    fullRoot.hoveredEmojiName = "";
-                                                                    fullRoot.emojiHoveredKitchenUrl = "";
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-
-                                                    MouseArea {
-                                                        id: kitchenMouseArea
-                                                        anchors.fill: parent
-                                                        hoverEnabled: true
-                                                        cursorShape: Qt.PointingHandCursor
-                                                        onClicked: {
-                                                            let cmd = 'curl -sL "' + modelData.url + '" > /tmp/kmoji_copy.png && (wl-copy --type image/png < /tmp/kmoji_copy.png || xclip -selection clipboard -t image/png -i /tmp/kmoji_copy.png)';
-                                                            shellSource.connectSource(cmd);
-                                                            showPasteTemporaryMessage(i18n("Copied mashup to clipboard!"));
-
-                                                            fullRoot.addRecentItem("kitchen", modelData);
-
-                                                            if (plasmoid.configuration.CloseAfterSelection) {
-                                                                if (fullRoot.plasmoidItem)
-                                                                fullRoot.plasmoidItem.expanded = false;
-                                                            }
-                                                        }
-                                                    }
-
-                                                    PlasmaComponents.ToolButton {
-                                                        anchors.top: parent.top
-                                                        anchors.right: parent.right
-                                                        anchors.margins: 2
-                                                        icon.name: fullRoot.isFavoriteItem("kitchen", {
-                                                            url: modelData.url
-                                                        }) ? "bookmarks-bookmarked" : "bookmarks"
-                                                        visible: kitchenHoverHandler.hovered
-                                                        width: 18
-                                                        height: 18
-                                                        display: PlasmaComponents.ToolButton.IconOnly
-                                                        z: 10
-
-                                                        background: Rectangle {
-                                                            color: parent.pressed ? Kirigami.Theme.highlightColor : (parent.hovered ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.35) : Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.85))
-                                                            radius: 3
-                                                            border.color: (parent.pressed || parent.hovered) ? Kirigami.Theme.highlightColor : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.15)
-                                                            border.width: 1
-                                                        }
-
-                                                        onClicked: {
-                                                            fullRoot.toggleFavoriteItem("kitchen", modelData);
-                                                        }
-                                                    }
+                                                if (plasmoid.configuration.CloseAfterSelection) {
+                                                    if (fullRoot.plasmoidItem)
+                                                        fullRoot.plasmoidItem.expanded = false;
                                                 }
+                                            } else if (mouse.button === Qt.RightButton) {
+                                                var globalPos = kitchenMouseArea.mapToItem(fullRoot, mouse.x, mouse.y);
+                                                contextMenu.emoji = "";
+                                                contextMenu.emojiObj = modelData;
+                                                contextMenu.type = "kitchen";
+                                                contextMenu.popup(globalPos.x, globalPos.y);
                                             }
                                         }
                                     }
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
 
                         PlasmaComponents.Label {
                             anchors.centerIn: parent
@@ -5575,18 +5545,28 @@ PlasmoidItem {
                 }
             }
 
-            PC3.Menu {
+             PC3.Menu {
                 id: contextMenu
                 property string emoji: ""
                 property var emojiObj: null
                 property string type: "emoji"
 
                 PC3.MenuItem {
-                    text: contextMenu.type === "kaomoji" ? i18n("Copy Kaomoji") : i18n("Copy Emoji")
+                    text: {
+                        if (contextMenu.type === "kaomoji") return i18n("Copy Kaomoji");
+                        if (contextMenu.type === "kitchen") return i18n("Copy Mashed Emoji");
+                        return i18n("Copy Emoji");
+                    }
                     icon.name: "edit-copy"
                     onClicked: {
-                        clipboard.content = contextMenu.emoji;
-                        showCopiedFeedback(contextMenu.emoji, contextMenu.emojiObj && contextMenu.emojiObj.name ? contextMenu.emojiObj.name : "");
+                        if (contextMenu.type === "kitchen" && contextMenu.emojiObj) {
+                            let cmd = 'curl -sL "' + contextMenu.emojiObj.url + '" > /tmp/kmoji_copy.png && (wl-copy --type image/png < /tmp/kmoji_copy.png || xclip -selection clipboard -t image/png -i /tmp/kmoji_copy.png)';
+                            shellSource.connectSource(cmd);
+                            showPasteTemporaryMessage(i18n("Copied mashup to clipboard!"));
+                        } else {
+                            clipboard.content = contextMenu.emoji;
+                            showCopiedFeedback(contextMenu.emoji, contextMenu.emojiObj && contextMenu.emojiObj.name ? contextMenu.emojiObj.name : "");
+                        }
                     }
                 }
 
@@ -5594,14 +5574,21 @@ PlasmoidItem {
                     text: i18n("Copy Name")
                     icon.name: "edit-copy"
                     visible: contextMenu.type !== "kaomoji"
-                    enabled: contextMenu.emojiObj && contextMenu.emojiObj.name && contextMenu.emojiObj.name.length > 0
+                    height: visible ? implicitHeight : 0
+                    enabled: contextMenu.type === "kitchen" ? (contextMenu.emojiObj !== null) : (contextMenu.emojiObj && contextMenu.emojiObj.name && contextMenu.emojiObj.name.length > 0)
                     onClicked: {
-                        if (contextMenu.emojiObj && contextMenu.emojiObj.name && contextMenu.emojiObj.name.length > 0) {
-                            clipboard.content = contextMenu.emojiObj.name;
-                            showPasteTemporaryMessage(i18n("Copied: %1 (%2)", contextMenu.emojiObj.name, contextMenu.emoji));
+                        if (contextMenu.type === "kitchen" && contextMenu.emojiObj) {
+                            let name = (contextMenu.emojiObj.emoji1 && contextMenu.emojiObj.emoji2) ? (contextMenu.emojiObj.emoji1 + " + " + contextMenu.emojiObj.emoji2) : i18n("Emoji Kitchen Mashup");
+                            clipboard.content = name;
+                            showPasteTemporaryMessage(i18n("Copied: %1", name));
                         } else {
-                            clipboard.content = contextMenu.emoji;
-                            showPasteTemporaryMessage(i18n("Copied: %1", contextMenu.emoji));
+                            if (contextMenu.emojiObj && contextMenu.emojiObj.name && contextMenu.emojiObj.name.length > 0) {
+                                clipboard.content = contextMenu.emojiObj.name;
+                                showPasteTemporaryMessage(i18n("Copied: %1 (%2)", contextMenu.emojiObj.name, contextMenu.emoji));
+                            } else {
+                                clipboard.content = contextMenu.emoji;
+                                showPasteTemporaryMessage(i18n("Copied: %1", contextMenu.emoji));
+                            }
                         }
                     }
                 }
@@ -5611,17 +5598,25 @@ PlasmoidItem {
                         if (contextMenu.type === "kaomoji") {
                             return isFavoriteItem("kaomoji", { emoji: contextMenu.emoji }) ? i18n("Unfavorite Kaomoji") : i18n("Favorite Kaomoji")
                         }
+                        if (contextMenu.type === "kitchen") {
+                            return isFavoriteItem("kitchen", { url: contextMenu.emojiObj ? contextMenu.emojiObj.url : "" }) ? i18n("Unfavorite Mashed Emoji") : i18n("Favorite Mashed Emoji")
+                        }
                         return isFavorite(contextMenu.emoji) ? i18n("Unfavorite Emoji") : i18n("Favorite Emoji")
                     }
                     icon.name: {
                         if (contextMenu.type === "kaomoji") {
                             return isFavoriteItem("kaomoji", { emoji: contextMenu.emoji }) ? "bookmarks" : "bookmarks-bookmarked"
                         }
+                        if (contextMenu.type === "kitchen") {
+                            return isFavoriteItem("kitchen", { url: contextMenu.emojiObj ? contextMenu.emojiObj.url : "" }) ? "bookmarks" : "bookmarks-bookmarked"
+                        }
                         return isFavorite(contextMenu.emoji) ? "bookmarks" : "bookmarks-bookmarked"
                     }
                     onClicked: {
                         if (contextMenu.type === "kaomoji") {
                             toggleFavoriteItem("kaomoji", { emoji: contextMenu.emoji, type: "kaomoji" });
+                        } else if (contextMenu.type === "kitchen") {
+                            toggleFavoriteItem("kitchen", contextMenu.emojiObj);
                         } else {
                             toggleFavoriteEmoji(contextMenu.emojiObj);
                         }
@@ -5634,6 +5629,8 @@ PlasmoidItem {
                 PC3.MenuItem {
                     text: i18n("Clear Favorite Emojis")
                     icon.name: "edit-clear"
+                    visible: fullRoot.favoriteEmojis.some(e => !e.type || e.type === "emoji" || e.type === "kitchen")
+                    height: visible ? implicitHeight : 0
                     onClicked: {
                         clearFavoriteEmojis();
                         showSearchTemporaryMessage(i18n("Cleared favorite emojis"));
@@ -5642,6 +5639,8 @@ PlasmoidItem {
                 PC3.MenuItem {
                     text: i18n("Clear Recent Emojis")
                     icon.name: "edit-clear"
+                    visible: fullRoot.recentEmojis.some(e => !e.type || e.type === "emoji" || e.type === "kitchen")
+                    height: visible ? implicitHeight : 0
                     onClicked: {
                         clearRecentEmojis();
                         showSearchTemporaryMessage(i18n("Cleared recent emojis"));
@@ -5654,6 +5653,8 @@ PlasmoidItem {
                 PC3.MenuItem {
                     text: i18n("Clear Favorite GIFs")
                     icon.name: "edit-clear"
+                    visible: fullRoot.favoriteEmojis.some(e => e.type === "gif")
+                    height: visible ? implicitHeight : 0
                     onClicked: {
                         clearFavoriteGifs();
                         showSearchTemporaryMessage(i18n("Cleared favorite GIFs"));
@@ -5662,6 +5663,8 @@ PlasmoidItem {
                 PC3.MenuItem {
                     text: i18n("Clear Recent GIFs")
                     icon.name: "edit-clear"
+                    visible: fullRoot.recentEmojis.some(e => e.type === "gif")
+                    height: visible ? implicitHeight : 0
                     onClicked: {
                         clearRecentGifs();
                         showSearchTemporaryMessage(i18n("Cleared recent GIFs"));
@@ -5674,6 +5677,8 @@ PlasmoidItem {
                 PC3.MenuItem {
                     text: i18n("Clear Favorite Kaomojis")
                     icon.name: "edit-clear"
+                    visible: fullRoot.favoriteEmojis.some(e => e.type === "kaomoji")
+                    height: visible ? implicitHeight : 0
                     onClicked: {
                         clearFavoriteKaomojis();
                         showSearchTemporaryMessage(i18n("Cleared favorite kaomojis"));
@@ -5682,6 +5687,8 @@ PlasmoidItem {
                 PC3.MenuItem {
                     text: i18n("Clear Recent Kaomojis")
                     icon.name: "edit-clear"
+                    visible: fullRoot.recentEmojis.some(e => e.type === "kaomoji")
+                    height: visible ? implicitHeight : 0
                     onClicked: {
                         clearRecentKaomojis();
                         showSearchTemporaryMessage(i18n("Cleared recent kaomojis"));

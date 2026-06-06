@@ -434,7 +434,7 @@ Kirigami.ScrollablePage {
         id: syncController
 
         property bool isSyncing: false
-        readonly property string defaultStatusText: i18n("Sync Emoji Database")
+        readonly property string defaultStatusText: i18n("Fetch Latest Assets")
         property string statusText: defaultStatusText
         property string resultIcon: ""
         property string logText: ""
